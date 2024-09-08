@@ -1,0 +1,40 @@
+[package]
+name = "terrain_and_stuff"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { version = "22", no-default-features = true, features = [
+    # A necessary evil. All shaders are WGSL.
+    "wgsl",
+    # No WebGL supported!
+    "webgpu",
+    # Don't care about DX12, using Vulkan limits variety more.
+    "metal",
+    # No time for Send/Sync headaches on the web.
+    "fragile-send-sync-non-atomic-wasm",
+] }
+
+#minifb = "0.28.0"
+# This project needs a few fixes that haven't been released yet.
+# Target a specific commit of minifb until 0.28.0 is released.
+minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
+
+# Logging, mostly since println can't be used on the web.
+log = "0.4.22"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Native only dependencies.
+pollster = "0.3.0"
+env_logger = { version = "0.11.5", default-features = false, features = [
+    "auto-color",
+    "humantime",
+] }
+
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Web only dependencies.
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+wasm-bindgen = "0.2.93"
+wasm-bindgen-futures = "0.4.43"
