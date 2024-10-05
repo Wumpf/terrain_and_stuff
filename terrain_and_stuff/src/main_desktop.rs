@@ -14,6 +14,7 @@ pub fn main_desktop() {
             return;
         }
 
-        application.draw_frame();
+        application.update();
+        application.draw();
     }
 }

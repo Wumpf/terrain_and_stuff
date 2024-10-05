@@ -20,8 +20,10 @@ wgpu = { version = "22", no-default-features = true, features = [
 # Target a specific commit of minifb until 0.28.0 is released.
 minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
 
-# Logging, mostly since println can't be used on the web.
-log = "0.4.22"
+log = "0.4.22"       # Logging, mostly since println can't be used on the web.
+glam = "0.29.0"
+slotmap = "1.0.7"
+thiserror = "1.0.64"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Native only dependencies.
@@ -38,3 +40,6 @@ console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 wasm-bindgen = "0.2.93"
 wasm-bindgen-futures = "0.4.43"
+
+[build-dependencies]
+walkdir = "2.5.0"

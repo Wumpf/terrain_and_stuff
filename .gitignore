@@ -1,1 +1,4 @@
 /target
+
+# Generated files:
+terrain_and_stuff/src/shaders_embedded.rs

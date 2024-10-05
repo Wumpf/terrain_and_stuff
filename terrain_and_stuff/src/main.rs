@@ -1,15 +1,21 @@
 use std::mem::ManuallyDrop;
 
 use minifb::{Window, WindowOptions};
+use resource_managers::{
+    PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
+};
 
 const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
 
-#[cfg(target_arch = "wasm32")]
-mod main_web;
-
 #[cfg(not(target_arch = "wasm32"))]
 mod main_desktop;
+#[cfg(target_arch = "wasm32")]
+mod main_web;
+#[cfg(target_arch = "wasm32")]
+mod shaders_embedded;
+
+mod resource_managers;
 
 struct Application<'a> {
     window: Window,
@@ -19,7 +25,8 @@ struct Application<'a> {
     device: wgpu::Device,
     queue: wgpu::Queue,
 
-    triangle_render_pipeline: wgpu::RenderPipeline,
+    pipeline_manager: PipelineManager,
+    triangle_render_pipeline: RenderPipelineHandle,
 }
 
 impl Drop for Application<'_> {
@@ -95,8 +102,11 @@ impl<'a> Application<'a> {
             panic!("{}", err);
         }));
 
+        let mut pipeline_manager = PipelineManager::new();
+
         let surface_format = Self::pick_surface_format(&surface, &adapter);
-        let triangle_render_pipeline = Self::create_render_pipeline(&device, surface_format);
+        let triangle_render_pipeline =
+            Self::create_render_pipeline(&mut pipeline_manager, &device, surface_format);
 
         let mut application = Application {
             window,
@@ -106,6 +116,7 @@ impl<'a> Application<'a> {
             device,
             queue,
 
+            pipeline_manager,
             triangle_render_pipeline,
         };
 
@@ -122,7 +133,7 @@ impl<'a> Application<'a> {
         // WebGPU doesn't support sRGB(-converting-on-write) output formats, but on native the first format is often an sRGB one.
         // So if we just blindly pick the first, we'll end up with different colors!
         // Since all the colors used in this example are _already_ in sRGB, pick the first non-sRGB format!
-        let surface_capabilitites = surface.get_capabilities(&adapter);
+        let surface_capabilitites = surface.get_capabilities(adapter);
         for format in &surface_capabilitites.formats {
             if !format.is_srgb() {
                 return *format;
@@ -134,43 +145,37 @@ impl<'a> Application<'a> {
     }
 
     fn create_render_pipeline(
+        pipeline_manager: &mut PipelineManager,
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
-    ) -> wgpu::RenderPipeline {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        });
-
+    ) -> RenderPipelineHandle {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
 
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("triangle"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[], // No need for vertex buffers, the shader generates all the data.
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                targets: &[Some(target_format.into())],
-            }),
-            multiview: None,
-            cache: None,
-        })
+        pipeline_manager
+            .create_render_pipeline(
+                device,
+                RenderPipelineDescriptor {
+                    debug_label: "triangle".to_owned(),
+                    layout: pipeline_layout,
+                    vertex_shader: ShaderEntryPoint {
+                        path: "shader.wgsl".into(),
+                        function_name: "vs_main".to_owned(),
+                    },
+                    fragment_shader: ShaderEntryPoint {
+                        path: "shader.wgsl".into(),
+                        function_name: "fs_main".to_owned(),
+                    },
+                    fragment_targets: vec![target_format.into()],
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                },
+            )
+            .unwrap()
     }
 
     fn configure_surface(&mut self) {
@@ -188,7 +193,11 @@ impl<'a> Application<'a> {
         );
     }
 
-    pub fn draw_frame(&mut self) {
+    pub fn update(&mut self) {
+        self.pipeline_manager.reload_changed_pipelines(&self.device);
+    }
+
+    pub fn draw(&mut self) {
         let frame = match self.surface.get_current_texture() {
             Ok(surface_texture) => surface_texture,
             Err(err) => match err {
@@ -219,6 +228,9 @@ impl<'a> Application<'a> {
                 label: Some("Main encoder"),
             });
 
+        if let Some(pipeline) = self
+            .pipeline_manager
+            .get_render_pipeline(self.triangle_render_pipeline)
         {
             let cornflower_blue = wgpu::Color {
                 r: 0.39215686274509803,
@@ -241,7 +253,7 @@ impl<'a> Application<'a> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.set_pipeline(&self.triangle_render_pipeline);
+            rpass.set_pipeline(pipeline);
             rpass.draw(0..3, 0..1);
         }
 

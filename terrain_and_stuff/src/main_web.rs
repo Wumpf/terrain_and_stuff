@@ -27,7 +27,8 @@ pub async fn start() {
 
     // Create the closure for updating and rendering the application.
     *update_closure_cpy.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        application.draw_frame();
+        application.update();
+        application.draw();
 
         // schedule this closure for running again at next frame
         request_animation_frame(update_closure.borrow().as_ref().unwrap());
