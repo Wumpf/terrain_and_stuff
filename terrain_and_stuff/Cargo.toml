@@ -20,10 +20,11 @@ wgpu = { version = "22", no-default-features = true, features = [
 # Target a specific commit of minifb until 0.28.0 is released.
 minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
 
-log = "0.4.22"       # Logging, mostly since println can't be used on the web.
 glam = "0.29.0"
+log = "0.4.22"       # Logging, mostly since println can't be used on the web.
 slotmap = "1.0.7"
 thiserror = "1.0.64"
+itertools = "0.13.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Native only dependencies.
@@ -32,6 +33,7 @@ env_logger = { version = "0.11.5", default-features = false, features = [
     "auto-color",
     "humantime",
 ] }
+notify = "6.1.1"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

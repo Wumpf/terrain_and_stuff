@@ -99,10 +99,11 @@ impl<'a> Application<'a> {
         // Make all errors forward to the console before panicking, this way they also show up on the web!
         device.on_uncaptured_error(Box::new(|err| {
             log::error!("{}", err);
-            panic!("{}", err);
+            //panic!("{}", err);
         }));
 
-        let mut pipeline_manager = PipelineManager::new();
+        let mut pipeline_manager =
+            PipelineManager::new().expect("Failed to create pipeline manager");
 
         let surface_format = Self::pick_surface_format(&surface, &adapter);
         let triangle_render_pipeline =
