@@ -1,13 +1,3 @@
-use std::mem::ManuallyDrop;
-
-use minifb::{Window, WindowOptions};
-use resource_managers::{
-    PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
-};
-
-const WIDTH: usize = 1920;
-const HEIGHT: usize = 1080;
-
 #[cfg(not(target_arch = "wasm32"))]
 mod main_desktop;
 #[cfg(target_arch = "wasm32")]
@@ -16,17 +6,37 @@ mod main_web;
 mod shaders_embedded;
 
 mod resource_managers;
+mod wgpu_error_handling;
+
+// -----------------------------------------
+
+use std::{
+    mem::ManuallyDrop,
+    sync::{atomic::AtomicU64, Arc},
+};
+
+use minifb::{Window, WindowOptions};
+use resource_managers::{
+    PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
+};
+use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
+
+const WIDTH: usize = 1920;
+const HEIGHT: usize = 1080;
 
 struct Application<'a> {
     window: Window,
     surface: ManuallyDrop<wgpu::Surface<'a>>,
     surface_format: wgpu::TextureFormat,
     adapter: wgpu::Adapter,
-    device: wgpu::Device,
+    device: Arc<wgpu::Device>,
     queue: wgpu::Queue,
 
+    active_frame_index: u64,
+    frame_index_for_uncaptured_errors: Arc<AtomicU64>,
     pipeline_manager: PipelineManager,
     triangle_render_pipeline: RenderPipelineHandle,
+    error_tracker: Arc<ErrorTracker>,
 }
 
 impl Drop for Application<'_> {
@@ -97,10 +107,27 @@ impl<'a> Application<'a> {
             .expect("Failed to create device");
 
         // Make all errors forward to the console before panicking, this way they also show up on the web!
-        device.on_uncaptured_error(Box::new(|err| {
-            log::error!("{}", err);
-            //panic!("{}", err);
-        }));
+        let error_tracker = Arc::new(ErrorTracker::default());
+
+        // Make sure to catch all errors, never crash, and deduplicate reported errors.
+        // `on_uncaptured_error` is a last-resort handler which we should never hit,
+        // since there should always be an open error scope.
+        //
+        // Note that this handler may not be called for all errors!
+        // (as of writing, wgpu-core will always call it when there's no open error scope, but Dawn doesn't!)
+        // Therefore, it is important to always have a `WgpuErrorScope` open!
+        // See https://www.w3.org/TR/webgpu/#telemetry
+        let frame_index_for_uncaptured_errors = Arc::new(AtomicU64::new(0));
+        device.on_uncaptured_error({
+            let error_tracker = Arc::clone(&error_tracker);
+            let frame_index_for_uncaptured_errors = frame_index_for_uncaptured_errors.clone();
+            Box::new(move |err| {
+                error_tracker.handle_error(
+                    err,
+                    frame_index_for_uncaptured_errors.load(std::sync::atomic::Ordering::Acquire),
+                );
+            })
+        });
 
         let mut pipeline_manager =
             PipelineManager::new().expect("Failed to create pipeline manager");
@@ -114,9 +141,12 @@ impl<'a> Application<'a> {
             surface: ManuallyDrop::new(surface),
             surface_format,
             adapter,
-            device,
+            device: Arc::new(device),
             queue,
 
+            active_frame_index: 0,
+            error_tracker,
+            frame_index_for_uncaptured_errors,
             pipeline_manager,
             triangle_render_pipeline,
         };
@@ -195,10 +225,13 @@ impl<'a> Application<'a> {
     }
 
     pub fn update(&mut self) {
+        self.active_frame_index += 1;
         self.pipeline_manager.reload_changed_pipelines(&self.device);
     }
 
     pub fn draw(&mut self) {
+        let error_scope = WgpuErrorScope::start(&self.device);
+
         let frame = match self.surface.get_current_texture() {
             Ok(surface_texture) => surface_texture,
             Err(err) => match err {
@@ -260,7 +293,26 @@ impl<'a> Application<'a> {
 
         let command_buffer = encoder.finish();
         self.queue.submit(Some(command_buffer));
-        frame.present()
+        frame.present();
+
+        {
+            let frame_index_for_uncaptured_errors = self.frame_index_for_uncaptured_errors.clone();
+            self.error_tracker.handle_error_future(
+                self.adapter.get_info().backend,
+                error_scope.end(),
+                self.active_frame_index,
+                move |err_tracker, frame_index| {
+                    // Update last completed frame index.
+                    //
+                    // Note that this means that the device timeline has now finished this frame as well!
+                    // Reminder: On WebGPU the device timeline may be arbitrarily behind the content timeline!
+                    // See <https://www.w3.org/TR/webgpu/#programming-model-timelines>.
+                    frame_index_for_uncaptured_errors
+                        .store(frame_index, std::sync::atomic::Ordering::Release);
+                    err_tracker.on_device_timeline_frame_finished(frame_index);
+                },
+            );
+        }
     }
 }
 

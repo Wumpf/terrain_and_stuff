@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use itertools::{self as _, Itertools};
+use itertools::{self as _};
 
 slotmap::new_key_type! { pub struct RenderPipelineHandle; }
 
@@ -32,6 +32,7 @@ pub struct RenderPipelineDescriptor {
 
 struct RenderPipelineEntry {
     pipeline: wgpu::RenderPipeline,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     descriptor: RenderPipelineDescriptor,
 }
 
@@ -61,6 +62,8 @@ pub enum PipelineError {
 pub struct PipelineManager {
     shader_modules: HashMap<PathBuf, ShaderModuleEntry>,
     render_pipelines: slotmap::SlotMap<RenderPipelineHandle, RenderPipelineEntry>,
+
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     shader_change_rx: std::sync::mpsc::Receiver<PathBuf>,
 
     //compute_pipelines: slotmap::SlotMap<PipelineKey, wgpu::ComputePipeline>,
@@ -100,7 +103,7 @@ impl PipelineManager {
 
             notify::Watcher::watch(
                 &mut watcher,
-                &std::path::Path::new(SHADERS_DIR),
+                std::path::Path::new(SHADERS_DIR),
                 notify::RecursiveMode::Recursive,
             )?;
 
@@ -141,10 +144,12 @@ impl PipelineManager {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub fn reload_changed_pipelines(&mut self, device: &wgpu::Device) {}
+    pub fn reload_changed_pipelines(&mut self, _device: &wgpu::Device) {}
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn reload_changed_pipelines(&mut self, device: &wgpu::Device) {
+        use itertools::Itertools as _;
+
         let shader_base_path = std::path::Path::new(SHADERS_DIR).canonicalize().unwrap();
 
         // Sometimes several change events come in at once, which is a bit annoying because of extra log.
@@ -165,7 +170,6 @@ impl PipelineManager {
                     Ok(shader_module) => {
                         self.shader_modules
                             .insert(path.to_path_buf(), shader_module);
-                        log::info!("Successfully reloaded shader {:?}", path);
                     }
                     Err(err) => {
                         log::error!("Failed to reload shader {:?}: {:?}", path, err);
@@ -176,29 +180,26 @@ impl PipelineManager {
 
             // Try to recreate all pipelines that use this shader.
             for render_pipeline in self.render_pipelines.values_mut() {
-                if &render_pipeline.descriptor.vertex_shader.path == path
-                    || &render_pipeline.descriptor.fragment_shader.path == path
+                if render_pipeline.descriptor.vertex_shader.path != path
+                    && render_pipeline.descriptor.fragment_shader.path != path
                 {
-                    match create_wgpu_render_pipeline(
-                        &mut self.shader_modules,
-                        &render_pipeline.descriptor,
-                        device,
-                    ) {
-                        Ok(wgpu_pipeline) => {
-                            log::info!(
-                                "Recreated pipeline {:?}",
-                                render_pipeline.descriptor.debug_label
-                            );
-                            render_pipeline.pipeline = wgpu_pipeline;
-                        }
-                        Err(err) => {
-                            // This actually shouldn't happen since errors on pipeline creation itself are usually delayed.
-                            log::error!(
-                                "Failed to recreate pipeline {:?}: {:?}",
-                                render_pipeline.descriptor.debug_label,
-                                err
-                            );
-                        }
+                    continue;
+                }
+
+                let label = &render_pipeline.descriptor.debug_label;
+                log::info!("Recreating pipeline {label:?}",);
+
+                match create_wgpu_render_pipeline(
+                    &mut self.shader_modules,
+                    &render_pipeline.descriptor,
+                    device,
+                ) {
+                    Ok(wgpu_pipeline) => {
+                        render_pipeline.pipeline = wgpu_pipeline;
+                    }
+                    Err(err) => {
+                        // This actually shouldn't happen since errors on pipeline creation itself are usually delayed.
+                        log::error!("Failed to recreate pipeline {label:?}: {err:?}");
                     }
                 }
             }
@@ -245,13 +246,13 @@ fn create_wgpu_render_pipeline(
         label: Some(&descriptor.debug_label),
         layout: Some(&descriptor.layout),
         vertex: wgpu::VertexState {
-            module: &vertex_shader_module,
+            module: vertex_shader_module,
             entry_point: Some(&descriptor.vertex_shader.function_name),
             compilation_options: shader_compilation_options(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
-            module: &fragment_shader_module,
+            module: fragment_shader_module,
             entry_point: Some(&descriptor.fragment_shader.function_name),
             compilation_options: shader_compilation_options(),
             targets: &targets,

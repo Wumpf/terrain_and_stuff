@@ -1285,6 +1285,7 @@ dependencies = [
  "log",
  "minifb",
  "notify",
+ "parking_lot",
  "pollster",
  "slotmap",
  "thiserror",
