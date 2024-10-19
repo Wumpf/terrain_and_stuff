@@ -1,7 +1,8 @@
 //! Handling the rendering output pipeline
-//! -> HDR, tonemapping, screenshot capturing etc.
+//! -> HDR, display transform (tonemapping), screenshot capturing etc.
 
-//pub mod hdr_backbuffer;
+mod hdr_backbuffer;
 mod screen;
 
+pub use hdr_backbuffer::HdrBackbuffer;
 pub use screen::Screen;

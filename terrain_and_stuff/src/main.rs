@@ -8,13 +8,14 @@ mod shaders_embedded;
 mod render_output;
 mod resource_managers;
 mod wgpu_error_handling;
+mod wgpu_utils;
 
 // -----------------------------------------
 
 use std::sync::{atomic::AtomicU64, Arc};
 
 use minifb::{Window, WindowOptions};
-use render_output::Screen;
+use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{
     PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
 };
@@ -25,6 +26,7 @@ const HEIGHT: usize = 1080;
 
 struct Application<'a> {
     screen: Screen<'a>,
+    hdr_backbuffer: HdrBackbuffer,
 
     window: Window,
     adapter: wgpu::Adapter,
@@ -122,17 +124,22 @@ impl<'a> Application<'a> {
         let mut pipeline_manager =
             PipelineManager::new().expect("Failed to create pipeline manager");
 
-        let screen = Screen::new(
+        let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
+        let screen = Screen::new(&device, &adapter, surface, resolution);
+        let hdr_backbuffer = HdrBackbuffer::new(
             &device,
-            &adapter,
-            surface,
-            glam::uvec2(window.get_size().0 as _, window.get_size().1 as _),
-        );
+            resolution,
+            &mut pipeline_manager,
+            screen.surface_format(),
+        )
+        .expect("Failed to create HDR backbuffer & display transform pipeline");
+
         let triangle_render_pipeline =
-            Self::create_render_pipeline(&mut pipeline_manager, &device, screen.surface_format());
+            Self::create_triangle_render_pipeline(&mut pipeline_manager, &device);
 
         Application {
             screen,
+            hdr_backbuffer,
 
             window,
             adapter,
@@ -147,10 +154,9 @@ impl<'a> Application<'a> {
         }
     }
 
-    fn create_render_pipeline(
+    fn create_triangle_render_pipeline(
         pipeline_manager: &mut PipelineManager,
         device: &wgpu::Device,
-        target_format: wgpu::TextureFormat,
     ) -> RenderPipelineHandle {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -172,7 +178,7 @@ impl<'a> Application<'a> {
                         path: "shader.wgsl".into(),
                         function_name: "fs_main".to_owned(),
                     },
-                    fragment_targets: vec![target_format.into()],
+                    fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
@@ -187,8 +193,11 @@ impl<'a> Application<'a> {
 
         let current_resolution =
             glam::uvec2(self.window.get_size().0 as _, self.window.get_size().1 as _);
+
         if self.screen.resolution() != current_resolution {
             self.screen.on_resize(&self.device, current_resolution);
+            self.hdr_backbuffer
+                .on_resize(&self.device, current_resolution);
         }
     }
 
@@ -222,7 +231,7 @@ impl<'a> Application<'a> {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: self.hdr_backbuffer.texture_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(cornflower_blue),
@@ -236,6 +245,9 @@ impl<'a> Application<'a> {
             rpass.set_pipeline(pipeline);
             rpass.draw(0..3, 0..1);
         }
+
+        self.hdr_backbuffer
+            .display_transform(&view, &mut encoder, &self.pipeline_manager);
 
         let command_buffer = encoder.finish();
         self.queue.submit(Some(command_buffer));
