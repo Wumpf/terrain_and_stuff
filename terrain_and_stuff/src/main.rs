@@ -5,17 +5,16 @@ mod main_web;
 #[cfg(target_arch = "wasm32")]
 mod shaders_embedded;
 
+mod render_output;
 mod resource_managers;
 mod wgpu_error_handling;
 
 // -----------------------------------------
 
-use std::{
-    mem::ManuallyDrop,
-    sync::{atomic::AtomicU64, Arc},
-};
+use std::sync::{atomic::AtomicU64, Arc};
 
 use minifb::{Window, WindowOptions};
+use render_output::Screen;
 use resource_managers::{
     PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
 };
@@ -25,9 +24,9 @@ const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
 
 struct Application<'a> {
+    screen: Screen<'a>,
+
     window: Window,
-    surface: ManuallyDrop<wgpu::Surface<'a>>,
-    surface_format: wgpu::TextureFormat,
     adapter: wgpu::Adapter,
     device: Arc<wgpu::Device>,
     queue: wgpu::Queue,
@@ -37,15 +36,6 @@ struct Application<'a> {
     pipeline_manager: PipelineManager,
     triangle_render_pipeline: RenderPipelineHandle,
     error_tracker: Arc<ErrorTracker>,
-}
-
-impl Drop for Application<'_> {
-    fn drop(&mut self) {
-        // Drop surface before dropping the window, to ensure it always refers to valid window handles.
-        unsafe {
-            ManuallyDrop::drop(&mut self.surface);
-        }
-    }
 }
 
 impl<'a> Application<'a> {
@@ -132,14 +122,19 @@ impl<'a> Application<'a> {
         let mut pipeline_manager =
             PipelineManager::new().expect("Failed to create pipeline manager");
 
-        let surface_format = Self::pick_surface_format(&surface, &adapter);
+        let screen = Screen::new(
+            &device,
+            &adapter,
+            surface,
+            glam::uvec2(window.get_size().0 as _, window.get_size().1 as _),
+        );
         let triangle_render_pipeline =
-            Self::create_render_pipeline(&mut pipeline_manager, &device, surface_format);
+            Self::create_render_pipeline(&mut pipeline_manager, &device, screen.surface_format());
 
-        let mut application = Application {
+        Application {
+            screen,
+
             window,
-            surface: ManuallyDrop::new(surface),
-            surface_format,
             adapter,
             device: Arc::new(device),
             queue,
@@ -149,30 +144,7 @@ impl<'a> Application<'a> {
             frame_index_for_uncaptured_errors,
             pipeline_manager,
             triangle_render_pipeline,
-        };
-
-        // Initial surface configuration - required at least on web since otherwise first get_current_texture() will panic.
-        application.configure_surface();
-
-        application
-    }
-
-    fn pick_surface_format(
-        surface: &wgpu::Surface,
-        adapter: &wgpu::Adapter,
-    ) -> wgpu::TextureFormat {
-        // WebGPU doesn't support sRGB(-converting-on-write) output formats, but on native the first format is often an sRGB one.
-        // So if we just blindly pick the first, we'll end up with different colors!
-        // Since all the colors used in this example are _already_ in sRGB, pick the first non-sRGB format!
-        let surface_capabilitites = surface.get_capabilities(adapter);
-        for format in &surface_capabilitites.formats {
-            if !format.is_srgb() {
-                return *format;
-            }
         }
-
-        log::warn!("Couldn't find a non-sRGB format, defaulting to the first one");
-        surface_capabilitites.formats[0]
     }
 
     fn create_render_pipeline(
@@ -209,49 +181,23 @@ impl<'a> Application<'a> {
             .unwrap()
     }
 
-    fn configure_surface(&mut self) {
-        // Need to reconfigure the surface and try again.
-        let (width, height) = self.window.get_size();
-        self.surface.configure(
-            &self.device,
-            &wgpu::SurfaceConfiguration {
-                format: self.surface_format,
-                ..self
-                    .surface
-                    .get_default_config(&self.adapter, width as u32, height as u32)
-                    .expect("Surface is not supported by the active adapter.")
-            },
-        );
-    }
-
     pub fn update(&mut self) {
         self.active_frame_index += 1;
         self.pipeline_manager.reload_changed_pipelines(&self.device);
+
+        let current_resolution =
+            glam::uvec2(self.window.get_size().0 as _, self.window.get_size().1 as _);
+        if self.screen.resolution() != current_resolution {
+            self.screen.on_resize(&self.device, current_resolution);
+        }
     }
 
     pub fn draw(&mut self) {
         let error_scope = WgpuErrorScope::start(&self.device);
 
-        let frame = match self.surface.get_current_texture() {
-            Ok(surface_texture) => surface_texture,
-            Err(err) => match err {
-                wgpu::SurfaceError::Timeout => {
-                    log::warn!("Surface texture acquisition timed out.");
-                    return; // Try again next frame. TODO: does this make always sense?
-                }
-                wgpu::SurfaceError::Outdated => {
-                    // Need to reconfigure the surface and try again.
-                    self.configure_surface();
-                    return;
-                }
-                wgpu::SurfaceError::Lost => {
-                    log::error!("Swapchain has been lost.");
-                    return; // Try again next frame. TODO: does this make always sense?
-                }
-                wgpu::SurfaceError::OutOfMemory => panic!("Out of memory on surface acquisition"),
-            },
+        let Some(frame) = self.screen.start_frame(&self.device) else {
+            return;
         };
-
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
