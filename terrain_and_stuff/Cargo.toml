@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = { version = "22", no-default-features = true, features = [
+wgpu = { version = "22", default-features = false, features = [
     # A necessary evil. All shaders are WGSL.
     "wgsl",
     # No WebGL supported!
@@ -21,7 +21,7 @@ wgpu = { version = "22", no-default-features = true, features = [
 minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
 
 glam = "0.29.0"
-log = "0.4.22"       # Logging, mostly since println can't be used on the web.
+log = "0.4.22"         # Logging, mostly since println can't be used on the web.
 slotmap = "1.0.7"
 thiserror = "1.0.64"
 itertools = "0.13.0"
