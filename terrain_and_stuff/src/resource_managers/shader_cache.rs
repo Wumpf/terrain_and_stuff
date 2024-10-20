@@ -69,6 +69,7 @@ impl ShaderCache {
     ///
     /// This recursively removes all shaders depending on this path as well.
     /// Path must be relative to [`SHADERS_DIR`].
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn remove_shader_for_path(&mut self, path: &Path) {
         let Some(handle) = self.shader_sources_per_path.remove(path) else {
             return;
@@ -213,7 +214,7 @@ fn raw_shader_source(path: &std::path::Path) -> Result<String, ShaderCacheError>
             .iter()
             .find_map(|(name, source)| {
                 if name == &path_str {
-                    Some(source)
+                    Some(*source)
                 } else {
                     None
                 }

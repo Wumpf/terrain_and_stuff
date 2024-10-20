@@ -32,9 +32,9 @@ pub struct RenderPipelineDescriptor {
     pub multisample: wgpu::MultisampleState,
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 struct RenderPipelineEntry {
     pipeline: wgpu::RenderPipeline,
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     descriptor: RenderPipelineDescriptor,
 
     /// List of all shader paths that went into building this render pipeline.
