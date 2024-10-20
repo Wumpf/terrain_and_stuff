@@ -90,7 +90,6 @@ impl<'a> Application<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults(), // Needed if you want to support WebGL!
                     ..Default::default()
                 },
                 None,
@@ -194,7 +193,11 @@ impl<'a> Application<'a> {
         let current_resolution =
             glam::uvec2(self.window.get_size().0 as _, self.window.get_size().1 as _);
 
-        if self.screen.resolution() != current_resolution {
+        if self.screen.resolution() != current_resolution
+            // Ignore zero sized windows, lots of resize operations can't handle this.
+            && current_resolution.x != 0
+            && current_resolution.y != 0
+        {
             self.screen.on_resize(&self.device, current_resolution);
             self.hdr_backbuffer
                 .on_resize(&self.device, current_resolution);
