@@ -45,6 +45,9 @@ pub enum ShaderCacheError {
     #[error("Failed to find shader for path {path:?} in embedded shaders.")]
     EmbeddedShaderNotFound { path: PathBuf },
 
+    #[error("Named modules are not supported, used by {path:?}")]
+    NamedModuleNotSupported { path: PathBuf },
+
     #[error(transparent)]
     NagaOilComposeError(#[from] naga_oil::compose::ComposerError),
 }
@@ -164,18 +167,31 @@ impl ShaderCache {
         let source = raw_shader_source(path)?;
 
         let (module_name, required_imports, _) = naga_oil::compose::get_preprocessor_data(&source);
+        if module_name.is_some() {
+            return Err(ShaderCacheError::NamedModuleNotSupported {
+                path: path.to_path_buf(),
+            });
+        }
+
         let is_direct_dependency_of = required_imports
             .iter()
-            .map(|import| self.get_or_load_shader_source(&Path::new(&import.import)))
+            .map(|import| {
+                let import_path = import
+                    .import
+                    .trim_start_matches("\"")
+                    .trim_end_matches("\"");
+                self.get_or_load_shader_source(&Path::new(import_path))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
-        if let Some(module_name) = module_name {
+        {
+            let path = path.to_str().expect("Shader path is not valid UTF-8");
             self.composer
                 .add_composable_module(naga_oil::compose::ComposableModuleDescriptor {
                     source: &source,
-                    file_path: &path.to_str().expect("Shader path is not valid UTF-8"),
+                    file_path: &path,
                     language: naga_oil::compose::ShaderLanguage::Wgsl,
-                    as_name: Some(module_name),
+                    as_name: Some(format!("{path:?}")),
                     additional_imports: &[],
                     shader_defs: HashMap::default(),
                 })?;
