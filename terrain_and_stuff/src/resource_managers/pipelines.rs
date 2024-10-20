@@ -1,6 +1,8 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
 use itertools::{self as _};
+
+use super::shader_cache::{ShaderCache, ShaderCacheError};
 
 slotmap::new_key_type! { pub struct RenderPipelineHandle; }
 
@@ -34,33 +36,26 @@ struct RenderPipelineEntry {
     pipeline: wgpu::RenderPipeline,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     descriptor: RenderPipelineDescriptor,
-}
 
-struct ShaderModuleEntry {
-    module: wgpu::ShaderModule,
-    // TODO: Track dependencies of this shader in turn.
+    /// List of all shader paths that went into building this render pipeline.
+    dependent_shader_paths: HashSet<PathBuf>,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum PipelineError {
     #[cfg(not(target_arch = "wasm32"))]
-    #[error("Failed to load shader for path {path:?}: {err}")]
-    FailedToLoadShaderSource { path: PathBuf, err: std::io::Error },
-
-    #[cfg(not(target_arch = "wasm32"))]
     #[error(transparent)]
     FileWatcherError(#[from] notify::Error),
 
-    #[cfg(target_arch = "wasm32")]
-    #[error("Failed to find shader for path {path:?} in embedded shaders.")]
-    EmbeddedShaderNotFound { path: PathBuf },
+    #[error(transparent)]
+    ShaderLoadError(#[from] ShaderCacheError),
 }
 
 /// Render & compute pipeline manager with simple shader reload (native only).
 ///
 /// Shaders are embedded in the binary on the web.
 pub struct PipelineManager {
-    shader_modules: HashMap<PathBuf, ShaderModuleEntry>,
+    shader_cache: ShaderCache,
     render_pipelines: slotmap::SlotMap<RenderPipelineHandle, RenderPipelineEntry>,
 
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -111,7 +106,7 @@ impl PipelineManager {
         };
 
         Ok(Self {
-            shader_modules: HashMap::new(),
+            shader_cache: ShaderCache::new(),
             render_pipelines: slotmap::SlotMap::default(),
             //compute_pipelines: slotmap::SlotMap::default(),
             shader_change_rx,
@@ -125,10 +120,12 @@ impl PipelineManager {
         device: &wgpu::Device,
         descriptor: RenderPipelineDescriptor,
     ) -> Result<RenderPipelineHandle, PipelineError> {
-        let pipeline = create_wgpu_render_pipeline(&mut self.shader_modules, &descriptor, device)?;
+        let (pipeline, dependent_shader_paths) =
+            create_wgpu_render_pipeline(&mut self.shader_cache, &descriptor, device)?;
         let handle = self.render_pipelines.insert(RenderPipelineEntry {
             pipeline,
             descriptor,
+            dependent_shader_paths,
         });
 
         Ok(handle)
@@ -164,25 +161,11 @@ impl PipelineManager {
 
             log::info!("Reloading shader {:?}", path);
 
-            if self.shader_modules.remove(path).is_some() {
-                // Try to reload it first in isolation, so we don't get the same shader load error on every pipeline that uses it.
-                match load_shader_module(device, path) {
-                    Ok(shader_module) => {
-                        self.shader_modules
-                            .insert(path.to_path_buf(), shader_module);
-                    }
-                    Err(err) => {
-                        log::error!("Failed to reload shader {:?}: {:?}", path, err);
-                        continue; // Keep pipelines outdated.
-                    }
-                }
-            }
+            self.shader_cache.remove_shader_for_path(path);
 
             // Try to recreate all pipelines that use this shader.
             for render_pipeline in self.render_pipelines.values_mut() {
-                if render_pipeline.descriptor.vertex_shader.path != path
-                    && render_pipeline.descriptor.fragment_shader.path != path
-                {
+                if !render_pipeline.dependent_shader_paths.contains(path) {
                     continue;
                 }
 
@@ -190,16 +173,18 @@ impl PipelineManager {
                 log::info!("Recreating pipeline {label:?}",);
 
                 match create_wgpu_render_pipeline(
-                    &mut self.shader_modules,
+                    &mut self.shader_cache,
                     &render_pipeline.descriptor,
                     device,
                 ) {
-                    Ok(wgpu_pipeline) => {
+                    Ok((wgpu_pipeline, dependent_shader_paths)) => {
                         render_pipeline.pipeline = wgpu_pipeline;
+                        render_pipeline.dependent_shader_paths = dependent_shader_paths;
                     }
                     Err(err) => {
                         // This actually shouldn't happen since errors on pipeline creation itself are usually delayed.
                         log::error!("Failed to recreate pipeline {label:?}: {err:?}");
+                        return; // Don't spam the user with errors for even more shaders.
                     }
                 }
             }
@@ -210,32 +195,25 @@ impl PipelineManager {
 }
 
 fn create_wgpu_render_pipeline(
-    shader_modules: &mut HashMap<PathBuf, ShaderModuleEntry>,
+    shader_cache: &mut ShaderCache,
     descriptor: &RenderPipelineDescriptor,
     device: &wgpu::Device,
-) -> Result<wgpu::RenderPipeline, PipelineError> {
-    // Can't use `entry` here, because it doesn't allow for multiple mutable references.
-    // So instead first add the shaders if they don't exist, then look them up again.
-    if !shader_modules.contains_key(&descriptor.vertex_shader.path) {
-        shader_modules.insert(
-            descriptor.vertex_shader.path.clone(),
-            load_shader_module(device, &descriptor.vertex_shader.path)?,
-        );
-    }
-    if !shader_modules.contains_key(&descriptor.fragment_shader.path) {
-        shader_modules.insert(
-            descriptor.fragment_shader.path.clone(),
-            load_shader_module(device, &descriptor.fragment_shader.path)?,
-        );
-    }
-    let vertex_shader_module = &shader_modules
-        .get(&descriptor.vertex_shader.path)
-        .unwrap()
-        .module;
-    let fragment_shader_module = &shader_modules
-        .get(&descriptor.fragment_shader.path)
-        .unwrap()
-        .module;
+) -> Result<(wgpu::RenderPipeline, HashSet<PathBuf>), PipelineError> {
+    let vertex_shader_handle =
+        shader_cache.get_or_load_shader_module(device, &descriptor.vertex_shader.path)?;
+    let fragment_shader_handle =
+        shader_cache.get_or_load_shader_module(device, &descriptor.fragment_shader.path)?;
+
+    let vertex_shader_module = shader_cache
+        .shader_module(vertex_shader_handle)
+        .expect("Invalid shader handle");
+    let fragment_shader_module = shader_cache
+        .shader_module(fragment_shader_handle)
+        .expect("Invalid shader handle");
+
+    let mut dependent_shader_paths = HashSet::default();
+    dependent_shader_paths.extend(vertex_shader_module.dependent_shaders.iter().cloned());
+    dependent_shader_paths.extend(fragment_shader_module.dependent_shaders.iter().cloned());
 
     let targets = descriptor
         .fragment_targets
@@ -246,15 +224,15 @@ fn create_wgpu_render_pipeline(
         label: Some(&descriptor.debug_label),
         layout: Some(&descriptor.layout),
         vertex: wgpu::VertexState {
-            module: vertex_shader_module,
+            module: &vertex_shader_module.module,
             entry_point: Some(&descriptor.vertex_shader.function_name),
-            compilation_options: shader_compilation_options(),
+            compilation_options: pipeline_compilation_options(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
-            module: fragment_shader_module,
+            module: &fragment_shader_module.module,
             entry_point: Some(&descriptor.fragment_shader.function_name),
-            compilation_options: shader_compilation_options(),
+            compilation_options: pipeline_compilation_options(),
             targets: &targets,
         }),
         primitive: descriptor.primitive,
@@ -264,51 +242,9 @@ fn create_wgpu_render_pipeline(
         cache: None,
     };
     let pipeline = device.create_render_pipeline(&wgpu_desc);
-    Ok(pipeline)
+    Ok((pipeline, dependent_shader_paths))
 }
 
-fn load_shader_module(
-    device: &wgpu::Device,
-    path: &std::path::Path,
-) -> Result<ShaderModuleEntry, PipelineError> {
-    let source;
-    #[cfg(target_arch = "wasm32")]
-    {
-        let path_str = path.to_str().unwrap();
-        source = crate::shaders_embedded::SHADER_FILES
-            .iter()
-            .find_map(|(name, source)| {
-                if name == &path_str {
-                    Some(source)
-                } else {
-                    None
-                }
-            })
-            .ok_or(PipelineError::EmbeddedShaderNotFound {
-                path: path.to_path_buf(),
-            })?
-            .to_owned();
-    };
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let path = std::path::Path::new(SHADERS_DIR).join(path);
-        source = std::fs::read_to_string(&path).map_err(|err| {
-            PipelineError::FailedToLoadShaderSource {
-                path: path.to_path_buf(),
-                err,
-            }
-        })?;
-    };
-
-    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: path.to_str(),
-        #[allow(clippy::needless_borrow)] // On Web this is a needless borrow, but on native it's not.
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(&source)),
-    });
-
-    Ok(ShaderModuleEntry { module })
-}
-
-fn shader_compilation_options() -> wgpu::PipelineCompilationOptions<'static> {
+fn pipeline_compilation_options() -> wgpu::PipelineCompilationOptions<'static> {
     wgpu::PipelineCompilationOptions::default()
 }

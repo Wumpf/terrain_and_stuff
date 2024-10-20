@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 wgpu = { version = "22", default-features = false, features = [
-    # A necessary evil. All shaders are WGSL.
-    "wgsl",
+    # We use naga_oil, so we directly use naga-ir for shader creation.
+    "naga-ir",
     # No WebGL supported!
     "webgpu",
     # Don't care about DX12, using Vulkan limits variety more.
@@ -21,11 +21,12 @@ wgpu = { version = "22", default-features = false, features = [
 minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
 
 glam = "0.29.0"
-log = "0.4.22"         # Logging, mostly since println can't be used on the web.
+itertools = "0.13.0"
+log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.
+naga_oil = { version = "0.15.0", default-features = false }
+parking_lot = "0.12.3"
 slotmap = "1.0.7"
 thiserror = "1.0.64"
-itertools = "0.13.0"
-parking_lot = "0.12.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Native only dependencies.

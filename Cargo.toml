@@ -6,6 +6,8 @@ default-members = ["terrain_and_stuff"]
 [patch.crates-io]
 # Because someone gotta test the cutting edge!
 wgpu = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
+naga = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
+naga_oil = { git = "https://github.com/wumpf/naga_oil", branch = "cutting-edge-wgpu" }
 
 # wgpu = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
 # wgpu-types = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
