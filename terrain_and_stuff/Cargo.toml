@@ -20,6 +20,7 @@ wgpu = { version = "22", default-features = false, features = [
 # Target a specific commit of minifb until 0.28.0 is released.
 minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
 
+anyhow = "1.0.90"
 glam = "0.29.0"
 itertools = "0.13.0"
 log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.

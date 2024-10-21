@@ -3,6 +3,7 @@ use crate::{
         PipelineError, PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle,
         ShaderEntryPoint,
     },
+    screen_triangle::screen_triangle_vertex_shader,
     wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc},
 };
 
@@ -49,10 +50,7 @@ impl HdrBackbuffer {
             RenderPipelineDescriptor {
                 debug_label: "Display transform".to_owned(),
                 layout: pipeline_layout,
-                vertex_shader: ShaderEntryPoint {
-                    path: "screen_triangle.wgsl".into(),
-                    function_name: "vs_main".to_owned(),
-                },
+                vertex_shader: screen_triangle_vertex_shader(),
                 fragment_shader: ShaderEntryPoint {
                     path: "display_transform.wgsl".into(),
                     function_name: "fs_main".to_owned(),

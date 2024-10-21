@@ -19,7 +19,7 @@ pub async fn start() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init().expect("could not initialize logger");
 
-    let mut application = Application::new().await;
+    let mut application = Application::new().await.unwrap();
 
     // A reference counted pointer to the closure that will update and render the application.
     let update_closure = Rc::new(RefCell::new(None));

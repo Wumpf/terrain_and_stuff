@@ -7,6 +7,8 @@ mod shaders_embedded;
 
 mod render_output;
 mod resource_managers;
+pub mod screen_triangle;
+mod sky;
 mod wgpu_error_handling;
 mod wgpu_utils;
 
@@ -14,11 +16,13 @@ mod wgpu_utils;
 
 use std::sync::{atomic::AtomicU64, Arc};
 
+use anyhow::Context;
 use minifb::{Window, WindowOptions};
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{
     PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
 };
+use sky::Sky;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
 const WIDTH: usize = 1920;
@@ -27,6 +31,7 @@ const HEIGHT: usize = 1080;
 struct Application<'a> {
     screen: Screen<'a>,
     hdr_backbuffer: HdrBackbuffer,
+    sky: Sky,
 
     window: Window,
     adapter: wgpu::Adapter,
@@ -45,7 +50,7 @@ impl<'a> Application<'a> {
     ///
     /// There's various ways for this to fail, all of which are handled via `expect` right now.
     /// Of course there's be better ways to handle these (e.g. show something nice on screen or try a bit harder).
-    async fn new() -> Self {
+    async fn new() -> anyhow::Result<Self> {
         let instance =
             wgpu::util::new_instance_with_webgpu_detection(wgpu::InstanceDescriptor::default())
                 .await;
@@ -58,10 +63,7 @@ impl<'a> Application<'a> {
                 resize: true,
                 ..Default::default()
             },
-        )
-        .unwrap_or_else(|e| {
-            panic!("{}", e);
-        });
+        )?;
 
         // Unfortunately, mini_fb's window type isn't `Send` which is required for wgpu's `WindowHandle` trait.
         // We instead have to use the unsafe variant to create a surface directly from the window handle.
@@ -75,7 +77,7 @@ impl<'a> Application<'a> {
                     .expect("Failed to create surface target."),
             )
         }
-        .expect("Failed to create surface");
+        .context("Failed to create surface")?;
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -83,7 +85,7 @@ impl<'a> Application<'a> {
                 ..Default::default()
             })
             .await
-            .expect("Failed to find an appropriate adapter");
+            .context("Failed to find an appropriate adapter")?;
         log::info!("Created wgpu adapter: {:?}", adapter.get_info());
 
         let (device, queue) = adapter
@@ -95,7 +97,7 @@ impl<'a> Application<'a> {
                 None,
             )
             .await
-            .expect("Failed to create device");
+            .context("Failed to create device")?;
 
         // Make all errors forward to the console before panicking, this way they also show up on the web!
         let error_tracker = Arc::new(ErrorTracker::default());
@@ -120,8 +122,7 @@ impl<'a> Application<'a> {
             })
         });
 
-        let mut pipeline_manager =
-            PipelineManager::new().expect("Failed to create pipeline manager");
+        let mut pipeline_manager = PipelineManager::new().context("Create pipeline manager")?;
 
         let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
         let screen = Screen::new(&device, &adapter, surface, resolution);
@@ -131,12 +132,14 @@ impl<'a> Application<'a> {
             &mut pipeline_manager,
             screen.surface_format(),
         )
-        .expect("Failed to create HDR backbuffer & display transform pipeline");
+        .context("Create HDR backbuffer & display transform pipeline")?;
+        let sky = Sky::new(&device, &mut pipeline_manager).context("Create sky renderer")?;
 
         let triangle_render_pipeline =
             Self::create_triangle_render_pipeline(&mut pipeline_manager, &device);
 
-        Application {
+        Ok(Application {
+            sky,
             screen,
             hdr_backbuffer,
 
@@ -150,7 +153,7 @@ impl<'a> Application<'a> {
             frame_index_for_uncaptured_errors,
             pipeline_manager,
             triangle_render_pipeline,
-        }
+        })
     }
 
     fn create_triangle_render_pipeline(
@@ -220,35 +223,7 @@ impl<'a> Application<'a> {
                 label: Some("Main encoder"),
             });
 
-        if let Some(pipeline) = self
-            .pipeline_manager
-            .get_render_pipeline(self.triangle_render_pipeline)
-        {
-            let cornflower_blue = wgpu::Color {
-                r: 0.39215686274509803,
-                g: 0.5843137254901961,
-                b: 0.9294117647058824,
-                a: 1.0,
-            };
-
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: self.hdr_backbuffer.texture_view(),
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(cornflower_blue),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            rpass.set_pipeline(pipeline);
-            rpass.draw(0..3, 0..1);
-        }
-
+        self.draw_scene(&mut encoder);
         self.hdr_backbuffer
             .display_transform(&view, &mut encoder, &self.pipeline_manager);
 
@@ -275,6 +250,33 @@ impl<'a> Application<'a> {
             );
         }
     }
+
+    fn draw_scene(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        let mut hdr_rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: self.hdr_backbuffer.texture_view(),
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        self.sky.draw(&mut hdr_rpass, &self.pipeline_manager);
+
+        if let Some(pipeline) = self
+            .pipeline_manager
+            .get_render_pipeline(self.triangle_render_pipeline)
+        {
+            hdr_rpass.set_pipeline(pipeline);
+            hdr_rpass.draw(0..3, 0..1);
+        }
+    }
 }
 
 fn main() {
@@ -282,5 +284,5 @@ fn main() {
     return; // Not used on web, this method is merely a placeholder.
 
     #[cfg(not(target_arch = "wasm32"))]
-    main_desktop::main_desktop();
+    main_desktop::main_desktop().unwrap();
 }
