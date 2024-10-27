@@ -38,9 +38,9 @@ impl Sky {
         Ok(Self { render_pipeline })
     }
 
-    pub fn draw<'a>(
+    pub fn draw(
         &self,
-        rpass: &mut wgpu::RenderPass<'a>,
+        rpass: &mut wgpu::RenderPass<'_>,
         pipeline_manager: &PipelineManager,
     ) -> Option<()> {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipeline)?;

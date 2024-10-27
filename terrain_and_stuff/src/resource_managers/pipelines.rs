@@ -238,9 +238,7 @@ fn create_wgpu_render_pipeline(
             module: &vertex_shader_module.module,
             entry_point: descriptor
                 .vertex_shader
-                .function_name
-                .as_ref()
-                .map(|x| x.as_str()),
+                .function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             buffers: &[],
         },
@@ -248,9 +246,7 @@ fn create_wgpu_render_pipeline(
             module: &fragment_shader_module.module,
             entry_point: descriptor
                 .fragment_shader
-                .function_name
-                .as_ref()
-                .map(|x| x.as_str()),
+                .function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             targets: &targets,
         }),

@@ -145,7 +145,7 @@ impl ShaderCache {
             }
         }
         let mut dependent_shaders = HashSet::new();
-        collect_dependent_shaders(&source, &self.shader_sources, &mut dependent_shaders);
+        collect_dependent_shaders(source, &self.shader_sources, &mut dependent_shaders);
 
         self.shader_modules.insert(
             handle,
@@ -181,7 +181,7 @@ impl ShaderCache {
                     .import
                     .trim_start_matches("\"")
                     .trim_end_matches("\"");
-                self.get_or_load_shader_source(&Path::new(import_path))
+                self.get_or_load_shader_source(Path::new(import_path))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -190,7 +190,7 @@ impl ShaderCache {
             self.composer
                 .add_composable_module(naga_oil::compose::ComposableModuleDescriptor {
                     source: &source,
-                    file_path: &path,
+                    file_path: path,
                     language: naga_oil::compose::ShaderLanguage::Wgsl,
                     as_name: Some(format!("{path:?}")),
                     additional_imports: &[],
@@ -227,11 +227,11 @@ fn raw_shader_source(path: &std::path::Path) -> Result<String, ShaderCacheError>
     #[cfg(not(target_arch = "wasm32"))]
     {
         let path = std::path::Path::new(SHADERS_DIR).join(path);
-        Ok(std::fs::read_to_string(&path).map_err(|err| {
+        std::fs::read_to_string(&path).map_err(|err| {
             ShaderCacheError::FailedToLoadShaderSource {
                 path: path.to_path_buf(),
                 err,
             }
-        })?)
+        })
     }
 }
