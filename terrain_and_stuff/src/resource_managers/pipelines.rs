@@ -12,8 +12,19 @@ const SHADERS_DIR: &str = "terrain_and_stuff/shaders";
 pub struct ShaderEntryPoint {
     /// Path relative to the `shaders` directory.
     pub path: PathBuf,
-    /// The actual shader entry point.
-    pub function_name: String,
+
+    /// The actual shader entry point. If `None`, picks entry point with first matching type.
+    pub function_name: Option<String>,
+}
+
+impl ShaderEntryPoint {
+    /// First matching shader entry point in the shader file.
+    pub fn first_in(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            function_name: None,
+        }
+    }
 }
 
 /// Render pipeline descriptor, mostly a copy of [`wgpu::RenderPipelineDescriptor`],
@@ -225,13 +236,21 @@ fn create_wgpu_render_pipeline(
         layout: Some(&descriptor.layout),
         vertex: wgpu::VertexState {
             module: &vertex_shader_module.module,
-            entry_point: Some(&descriptor.vertex_shader.function_name),
+            entry_point: descriptor
+                .vertex_shader
+                .function_name
+                .as_ref()
+                .map(|x| x.as_str()),
             compilation_options: pipeline_compilation_options(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: &fragment_shader_module.module,
-            entry_point: Some(&descriptor.fragment_shader.function_name),
+            entry_point: descriptor
+                .fragment_shader
+                .function_name
+                .as_ref()
+                .map(|x| x.as_str()),
             compilation_options: pipeline_compilation_options(),
             targets: &targets,
         }),

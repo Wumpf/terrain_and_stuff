@@ -7,7 +7,6 @@ mod shaders_embedded;
 
 mod render_output;
 mod resource_managers;
-pub mod screen_triangle;
 mod sky;
 mod wgpu_error_handling;
 mod wgpu_utils;
@@ -172,14 +171,8 @@ impl<'a> Application<'a> {
                 RenderPipelineDescriptor {
                     debug_label: "triangle".to_owned(),
                     layout: pipeline_layout,
-                    vertex_shader: ShaderEntryPoint {
-                        path: "shader.wgsl".into(),
-                        function_name: "vs_main".to_owned(),
-                    },
-                    fragment_shader: ShaderEntryPoint {
-                        path: "shader.wgsl".into(),
-                        function_name: "fs_main".to_owned(),
-                    },
+                    vertex_shader: ShaderEntryPoint::first_in("shader.wgsl"),
+                    fragment_shader: ShaderEntryPoint::first_in("shader.wgsl"),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,

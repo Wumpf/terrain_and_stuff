@@ -4,7 +4,6 @@ use crate::{
         PipelineError, PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle,
         ShaderEntryPoint,
     },
-    screen_triangle::screen_triangle_vertex_shader,
 };
 
 pub struct Sky {
@@ -27,11 +26,8 @@ impl Sky {
             RenderPipelineDescriptor {
                 debug_label: "Sky".to_owned(),
                 layout,
-                vertex_shader: screen_triangle_vertex_shader(),
-                fragment_shader: ShaderEntryPoint {
-                    path: "sky.wgsl".into(),
-                    function_name: "fs_main".to_owned(),
-                },
+                vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
+                fragment_shader: ShaderEntryPoint::first_in("sky.wgsl"),
                 fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None, // TODO: make it possible to draw the sky last
