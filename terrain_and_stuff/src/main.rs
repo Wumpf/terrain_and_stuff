@@ -18,9 +18,7 @@ use std::sync::{atomic::AtomicU64, Arc};
 use anyhow::Context;
 use minifb::{Window, WindowOptions};
 use render_output::{HdrBackbuffer, Screen};
-use resource_managers::{
-    PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
-};
+use resource_managers::PipelineManager;
 use sky::Sky;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
@@ -40,7 +38,6 @@ struct Application<'a> {
     active_frame_index: u64,
     frame_index_for_uncaptured_errors: Arc<AtomicU64>,
     pipeline_manager: PipelineManager,
-    triangle_render_pipeline: RenderPipelineHandle,
     error_tracker: Arc<ErrorTracker>,
 }
 
@@ -134,9 +131,6 @@ impl<'a> Application<'a> {
         .context("Create HDR backbuffer & display transform pipeline")?;
         let sky = Sky::new(&device, &mut pipeline_manager).context("Create sky renderer")?;
 
-        let triangle_render_pipeline =
-            Self::create_triangle_render_pipeline(&mut pipeline_manager, &device);
-
         Ok(Application {
             sky,
             screen,
@@ -151,35 +145,7 @@ impl<'a> Application<'a> {
             error_tracker,
             frame_index_for_uncaptured_errors,
             pipeline_manager,
-            triangle_render_pipeline,
         })
-    }
-
-    fn create_triangle_render_pipeline(
-        pipeline_manager: &mut PipelineManager,
-        device: &wgpu::Device,
-    ) -> RenderPipelineHandle {
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
-        });
-
-        pipeline_manager
-            .create_render_pipeline(
-                device,
-                RenderPipelineDescriptor {
-                    debug_label: "triangle".to_owned(),
-                    layout: pipeline_layout,
-                    vertex_shader: ShaderEntryPoint::first_in("shader.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in("shader.wgsl"),
-                    fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                },
-            )
-            .unwrap()
     }
 
     pub fn update(&mut self) {
@@ -261,14 +227,6 @@ impl<'a> Application<'a> {
         });
 
         self.sky.draw(&mut hdr_rpass, &self.pipeline_manager);
-
-        if let Some(pipeline) = self
-            .pipeline_manager
-            .get_render_pipeline(self.triangle_render_pipeline)
-        {
-            hdr_rpass.set_pipeline(pipeline);
-            hdr_rpass.draw(0..3, 0..1);
-        }
     }
 }
 
