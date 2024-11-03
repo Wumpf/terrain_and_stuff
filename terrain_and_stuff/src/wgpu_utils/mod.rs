@@ -1,5 +1,5 @@
 mod binding_builder;
-//mod uniformbuffer;
+pub mod wgpu_buffer_types;
 
 pub use binding_builder::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc};
 //pub use uniformbuffer::UniformBuffer;

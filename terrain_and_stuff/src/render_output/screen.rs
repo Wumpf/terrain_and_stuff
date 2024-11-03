@@ -28,9 +28,9 @@ impl<'a> Screen<'a> {
         screen
     }
 
-    // pub fn aspect_ratio(&self) -> f32 {
-    //     self.resolution.x as f32 / self.resolution.y as f32
-    // }
+    pub fn aspect_ratio(&self) -> f32 {
+        self.resolution.x as f32 / self.resolution.y as f32
+    }
 
     pub fn resolution(&self) -> glam::UVec2 {
         self.resolution

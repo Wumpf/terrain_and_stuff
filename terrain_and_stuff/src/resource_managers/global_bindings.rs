@@ -1,13 +1,48 @@
-use crate::wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc};
+use crate::wgpu_utils::{
+    wgpu_buffer_types, BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc,
+};
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct FrameUniformBuffer {
+    pub view_from_world: wgpu_buffer_types::Mat4x3,
+    pub projection_from_view: wgpu_buffer_types::Mat4,
+    pub projection_from_world: wgpu_buffer_types::Mat4,
+
+    /// Camera position in world space.
+    pub camera_position: wgpu_buffer_types::Vec3RowPadded,
+
+    /// Camera direction in world space.
+    /// Same as -vec3f(view_from_world[0].z, view_from_world[1].z, view_from_world[2].z)
+    pub camera_forward: wgpu_buffer_types::Vec3RowPadded,
+
+    /// (tan(fov_y / 2) * aspect_ratio, tan(fov_y /2)), i.e. half ratio of screen dimension to screen distance in x & y.
+    /// Both values are set to f32max for orthographic projection
+    pub tan_half_fov: wgpu_buffer_types::Vec2RowPadded,
+}
 
 pub struct GlobalBindings {
     pub bind_group: wgpu::BindGroup,
     pub bind_group_layout: BindGroupLayoutWithDesc,
+    frame_uniform_buffer: wgpu::Buffer,
 }
 
 impl GlobalBindings {
     pub fn new(device: &wgpu::Device) -> Self {
+        let frame_uniform_buffer_size = std::mem::size_of::<FrameUniformBuffer>() as u64;
+        let frame_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Frame uniform buffer"),
+            usage: wgpu::BufferUsages::UNIFORM,
+            size: frame_uniform_buffer_size,
+            mapped_at_creation: false,
+        });
+
         let bind_group_layout = BindGroupLayoutBuilder::new()
+            .next_binding_all(wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: std::num::NonZeroU64::new(frame_uniform_buffer_size),
+            })
             .next_binding_all(wgpu::BindingType::Sampler(
                 wgpu::SamplerBindingType::NonFiltering,
             ))
@@ -35,6 +70,11 @@ impl GlobalBindings {
         });
 
         let bind_group = BindGroupBuilder::new(&bind_group_layout)
+            .buffer(wgpu::BufferBinding {
+                buffer: &frame_uniform_buffer,
+                offset: 0,
+                size: std::num::NonZeroU64::new(frame_uniform_buffer_size),
+            })
             .sampler(&nearest_neighbor_sampler)
             .sampler(&trilinear_sampler)
             .create(device, "GlobalBindings");
@@ -42,6 +82,11 @@ impl GlobalBindings {
         Self {
             bind_group,
             bind_group_layout,
+            frame_uniform_buffer,
         }
+    }
+
+    pub fn update_frame_uniform_buffer(&self, queue: &wgpu::Queue, frame: &FrameUniformBuffer) {
+        queue.write_buffer(&self.frame_uniform_buffer, 0, bytemuck::bytes_of(frame));
     }
 }

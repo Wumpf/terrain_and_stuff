@@ -182,6 +182,33 @@ impl<'a> Application<'a> {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        // TODO: camera system.
+        let camera_position = glam::Vec3::ZERO;
+        let camera_forward = glam::Vec3::Z;
+        let view_from_world =
+            glam::Affine3A::look_at_lh(camera_forward, camera_position, glam::Vec3::Y);
+        let fov_radians = 70.0 / std::f32::consts::TAU;
+        let projection_from_view = glam::Mat4::perspective_infinite_reverse_rh(
+            fov_radians,
+            self.screen.aspect_ratio(),
+            0.1,
+        );
+        self.global_bindings.update_frame_uniform_buffer(
+            &self.queue,
+            &resource_managers::FrameUniformBuffer {
+                view_from_world: view_from_world.into(),
+                projection_from_view: projection_from_view.into(),
+                projection_from_world: (projection_from_view * view_from_world).into(),
+                camera_position: camera_position.into(),
+                camera_forward: camera_forward.into(),
+                tan_half_fov: glam::vec2(
+                    (fov_radians * 0.5).tan() * self.screen.aspect_ratio(),
+                    (fov_radians * 0.5).tan(),
+                )
+                .into(),
+            },
+        );
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

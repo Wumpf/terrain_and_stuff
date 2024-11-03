@@ -16,6 +16,7 @@ wgpu = { version = "23", default-features = false, features = [
 ] }
 
 anyhow = "1.0.90"
+bytemuck = { version = "1.12.3", features = ["derive"] }
 glam = "0.29.0"
 itertools = "0.13.0"
 log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.
