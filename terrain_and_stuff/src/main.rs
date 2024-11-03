@@ -18,7 +18,7 @@ use std::sync::{atomic::AtomicU64, Arc};
 use anyhow::Context;
 use minifb::{Window, WindowOptions};
 use render_output::{HdrBackbuffer, Screen};
-use resource_managers::PipelineManager;
+use resource_managers::{GlobalBindings, PipelineManager};
 use sky::Sky;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
@@ -27,6 +27,7 @@ const HEIGHT: usize = 1080;
 
 struct Application<'a> {
     screen: Screen<'a>,
+    global_bindings: GlobalBindings,
     hdr_backbuffer: HdrBackbuffer,
     sky: Sky,
 
@@ -122,6 +123,7 @@ impl<'a> Application<'a> {
 
         let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
         let screen = Screen::new(&device, &adapter, surface, resolution);
+        let global_bindings = GlobalBindings::new(&device);
         let hdr_backbuffer = HdrBackbuffer::new(
             &device,
             resolution,
@@ -129,10 +131,12 @@ impl<'a> Application<'a> {
             screen.surface_format(),
         )
         .context("Create HDR backbuffer & display transform pipeline")?;
-        let sky = Sky::new(&device, &mut pipeline_manager).context("Create sky renderer")?;
+        let sky = Sky::new(&device, &global_bindings, &mut pipeline_manager)
+            .context("Create sky renderer")?;
 
         Ok(Application {
             sky,
+            global_bindings,
             screen,
             hdr_backbuffer,
 

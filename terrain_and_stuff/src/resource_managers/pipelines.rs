@@ -60,6 +60,9 @@ pub enum PipelineError {
 
     #[error(transparent)]
     ShaderLoadError(#[from] ShaderCacheError),
+
+    #[error("Pipeline handle is invalid.")]
+    MissingPipeline,
 }
 
 /// Render & compute pipeline manager with simple shader reload (native only).
@@ -145,10 +148,11 @@ impl PipelineManager {
     pub fn get_render_pipeline(
         &self,
         handle: RenderPipelineHandle,
-    ) -> Option<&wgpu::RenderPipeline> {
+    ) -> Result<&wgpu::RenderPipeline, PipelineError> {
         self.render_pipelines
             .get(handle)
             .map(|entry| &entry.pipeline)
+            .ok_or(PipelineError::MissingPipeline)
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -236,17 +240,13 @@ fn create_wgpu_render_pipeline(
         layout: Some(&descriptor.layout),
         vertex: wgpu::VertexState {
             module: &vertex_shader_module.module,
-            entry_point: descriptor
-                .vertex_shader
-                .function_name.as_deref(),
+            entry_point: descriptor.vertex_shader.function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: &fragment_shader_module.module,
-            entry_point: descriptor
-                .fragment_shader
-                .function_name.as_deref(),
+            entry_point: descriptor.fragment_shader.function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             targets: &targets,
         }),
