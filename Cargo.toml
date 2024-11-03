@@ -7,7 +7,7 @@ default-members = ["terrain_and_stuff"]
 # Because someone gotta test the cutting edge!
 wgpu = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
 naga = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
-naga_oil = { git = "https://github.com/wumpf/naga_oil", branch = "cutting-edge-wgpu" }
+naga_oil = { git = "https://github.com/bevyengine/naga_oil", branch = "master" }
 
 # wgpu = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
 # wgpu-types = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
