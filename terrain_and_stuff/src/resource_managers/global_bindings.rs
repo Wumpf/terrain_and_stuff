@@ -12,7 +12,7 @@ impl GlobalBindings {
                 wgpu::SamplerBindingType::NonFiltering,
             ))
             .next_binding_all(wgpu::BindingType::Sampler(
-                wgpu::SamplerBindingType::NonFiltering,
+                wgpu::SamplerBindingType::Filtering,
             ));
         let bind_group_layout = bind_group_layout.create(device, "GlobalBindings");
 

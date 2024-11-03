@@ -7,6 +7,7 @@ mod shaders_embedded;
 
 mod render_output;
 mod resource_managers;
+mod result_ext;
 mod sky;
 mod wgpu_error_handling;
 mod wgpu_utils;
@@ -19,6 +20,7 @@ use anyhow::Context;
 use minifb::{Window, WindowOptions};
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{GlobalBindings, PipelineManager};
+use result_ext::ResultExt;
 use sky::Sky;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
@@ -188,7 +190,8 @@ impl<'a> Application<'a> {
 
         self.draw_scene(&mut encoder);
         self.hdr_backbuffer
-            .display_transform(&view, &mut encoder, &self.pipeline_manager);
+            .display_transform(&view, &mut encoder, &self.pipeline_manager)
+            .ok_or_log("display transform");
 
         let command_buffer = encoder.finish();
         self.queue.submit(Some(command_buffer));
@@ -215,6 +218,10 @@ impl<'a> Application<'a> {
     }
 
     fn draw_scene(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        self.sky
+            .prepare(encoder, &self.pipeline_manager)
+            .ok_or_log("prepare sky");
+
         let mut hdr_rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -229,8 +236,10 @@ impl<'a> Application<'a> {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
-
-        self.sky.draw(&mut hdr_rpass, &self.pipeline_manager);
+        hdr_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
+        self.sky
+            .draw(&mut hdr_rpass, &self.pipeline_manager)
+            .ok_or_log("draw sky");
     }
 }
 
