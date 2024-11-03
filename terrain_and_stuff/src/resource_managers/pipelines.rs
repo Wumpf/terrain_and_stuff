@@ -198,7 +198,7 @@ impl PipelineManager {
                     }
                     Err(err) => {
                         // This actually shouldn't happen since errors on pipeline creation itself are usually delayed.
-                        log::error!("Failed to recreate pipeline {label:?}: {err:?}");
+                        log::error!("Failed to recreate pipeline {label:?}:\n{err}");
                         return; // Don't spam the user with errors for even more shaders.
                     }
                 }
