@@ -11,7 +11,10 @@ Sky rendering
 -----------------
 
 Based on [Sébastien Hillaire's "A Scalable and Production Ready
-Sky and Atmosphere Rendering Technique"](https://sebh.github.io/publications/egsr2020.pdf) (Eurographics Symposium on Rendering 2020),
-and [Andrew Helmer's ShaderToy](https://www.shadertoy.com/view/tdSXzD) ShaderToy implementation of the former.
-
+Sky and Atmosphere Rendering Technique"](https://sebh.github.io/publications/egsr2020.pdf) (Eurographics Symposium on Rendering 2020).
 See also Sébastien's [talk](https://www.youtube.com/watch?v=SW30QX1wxTY) about the topic at SIGGRAPH's 2020 Physically Based Shading Course.
+
+Various implementations exists:
+* [official demo implementation](https://github.com/sebh/UnrealEngineSkyAtmosphere) by Sébastien himself.
+* [Andrew Helmer's ShaderToy](https://www.shadertoy.com/view/tdSXzD).
+* [Lukas Herzbeger's rigorous WebGPU implementation](https://github.com/JolifantoBambla/webgpu-sky-atmosphere) with many different configuration options and compute shader variants
