@@ -7,11 +7,17 @@ default-members = ["terrain_and_stuff"]
 # Because someone gotta test the cutting edge!
 wgpu = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
 naga = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
-naga_oil = { git = "https://github.com/bevyengine/naga_oil", branch = "master" }
+naga_oil = { git = "https://github.com/wumpf/naga_oil", branch = "cutting-edge-wgpu" }
+
+# This project needs a few fixes that haven't been released yet.
+# Target a specific commit of minifb until 0.28.0 is released.
+minifb = { git = "https://github.com/emoon/rust_minifb", rev = "70a984fb94eba6f2bbdb4391ababf2b20d483c6b" }
+
 
 # wgpu = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
 # wgpu-types = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
 # naga = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
 # wgpu-hal = { git = "https://github.com/wumpf/wgpu", branch = "better-webgpu-selection2" }
+
 
 #minifb = { path = "../rust_minifb" }

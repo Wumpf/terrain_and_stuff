@@ -15,19 +15,15 @@ wgpu = { version = "23", default-features = false, features = [
     "fragile-send-sync-non-atomic-wasm",
 ] }
 
-#minifb = "0.28.0"
-# This project needs a few fixes that haven't been released yet.
-# Target a specific commit of minifb until 0.28.0 is released.
-minifb = { git = "https://github.com/emoon/rust_minifb", rev = "b20aaa9dc4d34b0c134e665a6eae24cb5bb06fca" }
-
 anyhow = "1.0.90"
 glam = "0.29.0"
 itertools = "0.13.0"
 log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.
-naga_oil = { version = "0.15.0", default-features = false }
+minifb = "0.27.0"
+naga_oil = { version = "0.16.0", default-features = false }
 parking_lot = "0.12.3"
 slotmap = "1.0.7"
-thiserror = "1.0.64"
+thiserror = "2.0.7"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Native only dependencies.
@@ -43,8 +39,8 @@ notify = "7.0.0"
 # Web only dependencies.
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
-wasm-bindgen = "0.2.95"
-wasm-bindgen-futures = "0.4.45"
+wasm-bindgen = "0.2.99"
+wasm-bindgen-futures = "0.4.49"
 
 [build-dependencies]
 walkdir = "2.5.0"

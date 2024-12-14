@@ -64,6 +64,10 @@ impl<'a> Screen<'a> {
                     wgpu::SurfaceError::OutOfMemory => {
                         panic!("Out of memory on surface acquisition")
                     }
+                    // TODO: this should really be a better error from wgpu to begin with.
+                    wgpu::SurfaceError::Other => {
+                        panic!("Other surface error.")
+                    }
                 }
                 None
             }
