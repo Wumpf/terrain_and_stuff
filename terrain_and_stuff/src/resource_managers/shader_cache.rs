@@ -48,8 +48,11 @@ pub enum ShaderCacheError {
     #[error("Named modules are not supported, used by {path:?}")]
     NamedModuleNotSupported { path: PathBuf },
 
-    #[error(transparent)]
-    NagaOilComposeError(#[from] naga_oil::compose::ComposerError),
+    #[error("Failed NagaOil composing step for {path:?}: {err}")]
+    NagaOilComposeError {
+        path: PathBuf,
+        err: naga_oil::compose::ComposerError,
+    },
 }
 
 impl ShaderCache {
@@ -112,19 +115,23 @@ impl ShaderCache {
         }
 
         let source = &self.shader_sources[handle];
-        let path = path.to_str().expect("Shader path is not valid UTF-8");
+        let path_string = path.to_str().expect("Shader path is not valid UTF-8");
 
         let module = self
             .composer
             .make_naga_module(naga_oil::compose::NagaModuleDescriptor {
                 source: &source.source,
-                file_path: path,
+                file_path: path_string,
                 shader_type: naga_oil::compose::ShaderType::Wgsl,
                 shader_defs: HashMap::default(),
                 additional_imports: &[],
+            })
+            .map_err(|err| ShaderCacheError::NagaOilComposeError {
+                path: path.to_path_buf(),
+                err,
             })?;
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(path),
+            label: Some(path_string),
             source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module.to_owned())),
         });
 
@@ -186,15 +193,19 @@ impl ShaderCache {
             .collect::<Result<Vec<_>, _>>()?;
 
         {
-            let path = path.to_str().expect("Shader path is not valid UTF-8");
+            let path_string = path.to_str().expect("Shader path is not valid UTF-8");
             self.composer
                 .add_composable_module(naga_oil::compose::ComposableModuleDescriptor {
                     source: &source,
-                    file_path: path,
+                    file_path: path_string,
                     language: naga_oil::compose::ShaderLanguage::Wgsl,
-                    as_name: Some(format!("{path:?}")),
+                    as_name: Some(format!("{path_string:?}")),
                     additional_imports: &[],
                     shader_defs: HashMap::default(),
+                })
+                .map_err(|err| ShaderCacheError::NagaOilComposeError {
+                    path: path.to_path_buf(),
+                    err,
                 })?;
         }
 
@@ -227,11 +238,9 @@ fn raw_shader_source(path: &std::path::Path) -> Result<String, ShaderCacheError>
     #[cfg(not(target_arch = "wasm32"))]
     {
         let path = std::path::Path::new(SHADERS_DIR).join(path);
-        std::fs::read_to_string(&path).map_err(|err| {
-            ShaderCacheError::FailedToLoadShaderSource {
-                path: path.to_path_buf(),
-                err,
-            }
+        std::fs::read_to_string(&path).map_err(|err| ShaderCacheError::FailedToLoadShaderSource {
+            path: path.to_path_buf(),
+            err,
         })
     }
 }
