@@ -47,19 +47,42 @@ impl GlobalBindings {
                 wgpu::SamplerBindingType::NonFiltering,
             ))
             .next_binding_all(wgpu::BindingType::Sampler(
+                wgpu::SamplerBindingType::NonFiltering,
+            ))
+            .next_binding_all(wgpu::BindingType::Sampler(
+                wgpu::SamplerBindingType::Filtering,
+            ))
+            .next_binding_all(wgpu::BindingType::Sampler(
                 wgpu::SamplerBindingType::Filtering,
             ));
         let bind_group_layout = bind_group_layout.create(device, "GlobalBindings");
 
-        let nearest_neighbor_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: "GlobalBindings::nearest_neighbor_sampler".into(),
+        let nearest_neighbor_sampler_clamp = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: "GlobalBindings::nearest_neighbor_sampler_clamp".into(),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+        let nearest_neighbor_sampler_repeat = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: "GlobalBindings::nearest_neighbor_sampler_repeat".into(),
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
             address_mode_w: wgpu::AddressMode::Repeat,
             ..Default::default()
         });
-        let trilinear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: "GlobalBindings::trilinear_sampler".into(),
+        let trilinear_sampler_clamp = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: "GlobalBindings::trilinear_sampler_clamp".into(),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+        let trilinear_sampler_repeat = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: "GlobalBindings::trilinear_sampler_repeat".into(),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
@@ -75,8 +98,10 @@ impl GlobalBindings {
                 offset: 0,
                 size: std::num::NonZeroU64::new(frame_uniform_buffer_size),
             })
-            .sampler(&nearest_neighbor_sampler)
-            .sampler(&trilinear_sampler)
+            .sampler(&nearest_neighbor_sampler_clamp)
+            .sampler(&nearest_neighbor_sampler_repeat)
+            .sampler(&trilinear_sampler_clamp)
+            .sampler(&trilinear_sampler_repeat)
             .create(device, "GlobalBindings");
 
         Self {
