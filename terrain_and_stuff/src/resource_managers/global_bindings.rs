@@ -32,7 +32,7 @@ impl GlobalBindings {
         let frame_uniform_buffer_size = std::mem::size_of::<FrameUniformBuffer>() as u64;
         let frame_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Frame uniform buffer"),
-            usage: wgpu::BufferUsages::UNIFORM,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             size: frame_uniform_buffer_size,
             mapped_at_creation: false,
         });
