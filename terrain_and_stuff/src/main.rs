@@ -188,7 +188,7 @@ impl<'a> Application<'a> {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         // TODO: camera system.
-        let camera_position = glam::Vec3::ZERO;
+        let camera_position = glam::vec3(0.0, 10.0, 0.0);
         let camera_forward = glam::Vec3::Z;
         let view_from_world = glam::Affine3A::look_at_lh(
             camera_position,
