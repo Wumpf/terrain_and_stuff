@@ -50,9 +50,14 @@ impl<'a> Application<'a> {
     /// There's various ways for this to fail, all of which are handled via `expect` right now.
     /// Of course there's be better ways to handle these (e.g. show something nice on screen or try a bit harder).
     async fn new() -> anyhow::Result<Self> {
-        let instance =
-            wgpu::util::new_instance_with_webgpu_detection(wgpu::InstanceDescriptor::default())
-                .await;
+        let instance = wgpu::util::new_instance_with_webgpu_detection(wgpu::InstanceDescriptor {
+            // Kick out DX12 & GL to limit variation - GL isn't terribly stable and feature complete, DX12 is always pain with shader compilation.
+            backends: wgpu::Backends::VULKAN
+                | wgpu::Backends::METAL
+                | wgpu::Backends::BROWSER_WEBGPU,
+            ..Default::default()
+        })
+        .await;
 
         let window = Window::new(
             "terrain_and_stuff",
@@ -185,8 +190,11 @@ impl<'a> Application<'a> {
         // TODO: camera system.
         let camera_position = glam::Vec3::ZERO;
         let camera_forward = glam::Vec3::Z;
-        let view_from_world =
-            glam::Affine3A::look_at_lh(camera_forward, camera_position, glam::Vec3::Y);
+        let view_from_world = glam::Affine3A::look_at_lh(
+            camera_position,
+            camera_position + camera_forward,
+            glam::Vec3::Y,
+        );
         let fov_radians = 70.0 / std::f32::consts::TAU;
         let projection_from_view = glam::Mat4::perspective_infinite_reverse_rh(
             fov_radians,
@@ -250,7 +258,7 @@ impl<'a> Application<'a> {
             .ok_or_log("prepare sky");
 
         let mut hdr_rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
+            label: Some("Primary HDR render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: self.hdr_backbuffer.texture_view(),
                 resolve_target: None,

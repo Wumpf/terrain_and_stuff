@@ -152,9 +152,11 @@ impl Sky {
     ) -> Result<(), PipelineError> {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_raymarch_sky)?;
 
+        rpass.push_debug_group("sky/raymarch_sky");
         rpass.set_bind_group(1, &self.raymarch_bindgroup, &[]);
         rpass.set_pipeline(pipeline);
         rpass.draw(0..3, 0..1);
+        rpass.pop_debug_group();
 
         Ok(())
     }
