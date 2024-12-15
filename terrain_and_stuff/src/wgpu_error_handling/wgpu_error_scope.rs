@@ -24,15 +24,20 @@ impl WgpuErrorScope {
 
     pub fn end(
         mut self,
-    ) -> [impl std::future::Future<Output = Option<wgpu::Error>> + Send + 'static; 2] {
+    ) -> [impl std::future::Future<Output = Option<wgpu::Error>> + Send + 'static; 3] {
         self.open = false;
-        [self.device.pop_error_scope(), self.device.pop_error_scope()]
+        [
+            self.device.pop_error_scope(),
+            self.device.pop_error_scope(),
+            self.device.pop_error_scope(),
+        ]
     }
 }
 
 impl Drop for WgpuErrorScope {
     fn drop(&mut self) {
         if self.open {
+            drop(self.device.pop_error_scope());
             drop(self.device.pop_error_scope());
             drop(self.device.pop_error_scope());
         }
