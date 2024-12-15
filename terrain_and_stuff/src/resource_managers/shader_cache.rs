@@ -174,7 +174,8 @@ impl ShaderCache {
 
         let source = raw_shader_source(path)?;
 
-        let (module_name, required_imports, _) = naga_oil::compose::get_preprocessor_data(&source);
+        let (module_name, required_imports, shader_defs) =
+            naga_oil::compose::get_preprocessor_data(&source);
         if module_name.is_some() {
             return Err(ShaderCacheError::NamedModuleNotSupported {
                 path: path.to_path_buf(),
@@ -201,7 +202,7 @@ impl ShaderCache {
                     language: naga_oil::compose::ShaderLanguage::Wgsl,
                     as_name: Some(format!("{path_string:?}")),
                     additional_imports: &[],
-                    shader_defs: HashMap::default(),
+                    shader_defs,
                 })
                 .map_err(|err| ShaderCacheError::NagaOilComposeError {
                     path: path.to_path_buf(),
@@ -209,11 +210,15 @@ impl ShaderCache {
                 })?;
         }
 
-        Ok(self.shader_sources.insert(ShaderSourceEntry {
+        let handle = self.shader_sources.insert(ShaderSourceEntry {
             file_path: path.to_path_buf(),
             source,
             direct_dependents: is_direct_dependency_of,
-        }))
+        });
+        self.shader_sources_per_path
+            .insert(path.to_path_buf(), handle);
+
+        Ok(handle)
     }
 }
 
