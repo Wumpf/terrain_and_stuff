@@ -48,10 +48,10 @@ pub enum ShaderCacheError {
     #[error("Named modules are not supported, used by {path:?}")]
     NamedModuleNotSupported { path: PathBuf },
 
-    #[error("Failed NagaOil composing step for {path:?}: {err}")]
+    #[error("Failed NagaOil composing step for {path:?}: {err_formatted}")]
     NagaOilComposeError {
         path: PathBuf,
-        err: naga_oil::compose::ComposerError,
+        err_formatted: String,
     },
 }
 
@@ -128,7 +128,7 @@ impl ShaderCache {
             })
             .map_err(|err| ShaderCacheError::NagaOilComposeError {
                 path: path.to_path_buf(),
-                err,
+                err_formatted: err.emit_to_string(&self.composer),
             })?;
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(path_string),
@@ -195,19 +195,23 @@ impl ShaderCache {
 
         {
             let path_string = path.to_str().expect("Shader path is not valid UTF-8");
-            self.composer
-                .add_composable_module(naga_oil::compose::ComposableModuleDescriptor {
-                    source: &source,
-                    file_path: path_string,
-                    language: naga_oil::compose::ShaderLanguage::Wgsl,
-                    as_name: Some(format!("{path_string:?}")),
-                    additional_imports: &[],
-                    shader_defs,
-                })
-                .map_err(|err| ShaderCacheError::NagaOilComposeError {
+            if let Err(err) =
+                self.composer
+                    .add_composable_module(naga_oil::compose::ComposableModuleDescriptor {
+                        source: &source,
+                        file_path: path_string,
+                        language: naga_oil::compose::ShaderLanguage::Wgsl,
+                        as_name: Some(format!("{path_string:?}")),
+                        additional_imports: &[],
+                        shader_defs,
+                    })
+            {
+                // Can't do map_err because otherwise borrow checker gets angry.
+                return Err(ShaderCacheError::NagaOilComposeError {
                     path: path.to_path_buf(),
-                    err,
-                })?;
+                    err_formatted: err.emit_to_string(&self.composer),
+                });
+            }
         }
 
         let handle = self.shader_sources.insert(ShaderSourceEntry {
