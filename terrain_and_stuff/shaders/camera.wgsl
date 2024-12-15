@@ -11,7 +11,8 @@ fn camera_ray_direction_from_screenuv(texcoord: vec2f) -> vec3f {
     let ndc = vec2f(texcoord.x - 0.5, 0.5 - texcoord.y) * 2.0;
 
     // Positive z since z dir is towards viewer (by RUF convention).
-    let view_space_dir = vec3f(ndc * frame.tan_half_fov, 1.0);
+    // TODO: Why -1 ndc? sounds like something else in the camera setup might be wrong.
+    let view_space_dir = vec3f(-ndc * frame.tan_half_fov, 1.0);
 
     // Note that since view_from_world is an orthonormal matrix, multiplying it from the right
     // means multiplying it with the transpose, meaning multiplying with the inverse!

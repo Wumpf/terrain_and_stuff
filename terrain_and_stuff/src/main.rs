@@ -5,6 +5,7 @@ mod main_web;
 #[cfg(target_arch = "wasm32")]
 mod shaders_embedded;
 
+mod camera;
 mod render_output;
 mod resource_managers;
 mod result_ext;
@@ -14,9 +15,13 @@ mod wgpu_utils;
 
 // -----------------------------------------
 
-use std::sync::{atomic::AtomicU64, Arc};
+use std::{
+    sync::{atomic::AtomicU64, Arc},
+    time::Instant,
+};
 
 use anyhow::Context;
+use camera::Camera;
 use minifb::{Window, WindowOptions};
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{GlobalBindings, PipelineManager};
@@ -37,6 +42,8 @@ struct Application<'a> {
     adapter: wgpu::Adapter,
     device: Arc<wgpu::Device>,
     queue: wgpu::Queue,
+    camera: Camera,
+    last_update: Instant,
 
     active_frame_index: u64,
     frame_index_for_uncaptured_errors: Arc<AtomicU64>,
@@ -142,24 +149,30 @@ impl<'a> Application<'a> {
             .context("Create sky renderer")?;
 
         Ok(Application {
-            sky,
-            global_bindings,
             screen,
+            global_bindings,
             hdr_backbuffer,
-
+            sky,
             window,
+
             adapter,
             device: Arc::new(device),
             queue,
+            camera: Camera::new(),
+            last_update: Instant::now(),
 
             active_frame_index: 0,
-            error_tracker,
             frame_index_for_uncaptured_errors,
             pipeline_manager,
+            error_tracker,
         })
     }
 
     pub fn update(&mut self) {
+        let current_time = Instant::now();
+        let delta_time = current_time.duration_since(self.last_update).as_secs_f32();
+        self.last_update = current_time;
+
         self.active_frame_index += 1;
         self.pipeline_manager.reload_changed_pipelines(&self.device);
 
@@ -175,6 +188,8 @@ impl<'a> Application<'a> {
             self.hdr_backbuffer
                 .on_resize(&self.device, current_resolution);
         }
+
+        self.camera.update(delta_time, &self.window);
     }
 
     pub fn draw(&mut self) {
@@ -187,33 +202,18 @@ impl<'a> Application<'a> {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // TODO: camera system.
-        let camera_position = glam::vec3(0.0, 10.0, 0.0);
-        let camera_forward = glam::Vec3::Z;
-        let view_from_world = glam::Affine3A::look_at_lh(
-            camera_position,
-            camera_position + camera_forward,
-            glam::Vec3::Y,
-        );
-        let fov_radians = 70.0 / std::f32::consts::TAU;
-        let projection_from_view = glam::Mat4::perspective_infinite_reverse_rh(
-            fov_radians,
-            self.screen.aspect_ratio(),
-            0.1,
-        );
+        let aspect_ratio = self.screen.aspect_ratio();
+        let view_from_world = self.camera.view_from_world();
+        let projection_from_view = self.camera.projection_from_view(aspect_ratio);
         self.global_bindings.update_frame_uniform_buffer(
             &self.queue,
             &resource_managers::FrameUniformBuffer {
                 view_from_world: view_from_world.into(),
                 projection_from_view: projection_from_view.into(),
                 projection_from_world: (projection_from_view * view_from_world).into(),
-                camera_position: camera_position.into(),
-                camera_forward: camera_forward.into(),
-                tan_half_fov: glam::vec2(
-                    (fov_radians * 0.5).tan() * self.screen.aspect_ratio(),
-                    (fov_radians * 0.5).tan(),
-                )
-                .into(),
+                camera_position: self.camera.position().into(),
+                camera_forward: self.camera.forward().into(),
+                tan_half_fov: self.camera.tan_half_fov(aspect_ratio).into(),
             },
         );
 
