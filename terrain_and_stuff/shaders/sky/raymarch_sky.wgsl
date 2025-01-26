@@ -25,7 +25,9 @@
 #import "sky/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
 #import "sky/constants.wgsl"::{
     ground_radius_km,
-    atmosphere_radius_km
+    atmosphere_radius_km,
+    sun_diameteter_rad,
+    sun_unscattered_luminance,
 }
 
 
@@ -90,6 +92,14 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
         transmittance *= sample_transmittance;
     }
 
+    // Add sun contribution
+    let sun = dot(camera_ray.direction, dir_to_sun) - cos(sun_diameteter_rad);
+    // Since the sun is so bright, this isn't giving us enough antialiasing yet.
+    //let antialiased_sun = saturate(sun / (fwidth(sun) * 100.0));
+    // Fudging this with a looks good enough.
+    let antialiased_sun = saturate(sun / (fwidth(sun) * 1000.0));
+    luminance += sun_unscattered_luminance * transmittance * antialiased_sun;
+
     return luminance;
 }
 
@@ -97,7 +107,7 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
 fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
     let camera_ray = camera_ray_from_screenuv(texcoord);
 
-    let dir_to_sun = normalize(vec3f(0.0, 2.0, 1.0)); // TODO:
+    let dir_to_sun = normalize(vec3f(0.0, 2.0, 30.0)); // TODO:
 
     // Figure out where the ray hits either the planet or the atmosphere end.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
