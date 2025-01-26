@@ -8,9 +8,14 @@
 // The "Aerial Perspective LUT" (a volume texture for storing luminance & transmittance) use for this
 // in the paper is a very good approximation, but naturally doesn't quite reach the quality of full per-pixel raymarching.
 
-// TODO: SebH uses photometric units rather than radiometric units.
-// Output units are more akin to radiometric units though, so if I want to stick to that I need a lumen/watts conversion somewhere 🤔.
-// See also https://www.reedbeta.com/blog/radiometry-versus-photometry/
+// SebH uses photometric units rather than radiometric units.
+// Output units are more akin to radiometric units though:
+// (See https://www.reedbeta.com/blog/radiometry-versus-photometry/)
+// As explained in https://seblagarde.wordpress.com/wp-content/uploads/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf
+// it has some advantages to keep all units radiometric for non-spectral rendering and a fixed conversion factor can be assumed.
+// To my (rather poor) understanding, there's some handwaviness around what the R/G/B values
+// for our photometric units actually mean - see also Nathan's comment here on recommending to cheat
+// by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
 #import "constants.wgsl"::{ERROR_RGBA}
 #import "camera.wgsl"::{camera_ray_from_screenuv}
@@ -92,7 +97,7 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
 fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
     let camera_ray = camera_ray_from_screenuv(texcoord);
 
-    let dir_to_sun = normalize(vec3f(0.0, 2.0, 10.0)); // TODO:
+    let dir_to_sun = normalize(vec3f(0.0, 2.0, 1.0)); // TODO:
 
     // Figure out where the ray hits either the planet or the atmosphere end.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
