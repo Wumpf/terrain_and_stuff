@@ -60,7 +60,7 @@ impl Camera {
                 let pitch_delta = new_pitch - old_pitch;
 
                 // Apply change in pitch:
-                self.world_from_view_rot *= glam::Quat::from_rotation_x(pitch_delta);
+                self.world_from_view_rot *= glam::Quat::from_rotation_x(-pitch_delta);
 
                 // Avoid numeric drift:
                 self.world_from_view_rot = self.world_from_view_rot.normalize();
