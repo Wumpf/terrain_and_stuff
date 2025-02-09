@@ -1,4 +1,5 @@
 use crate::{
+    primary_depth_buffer::PrimaryDepthBuffer,
     render_output::HdrBackbuffer,
     resource_managers::{
         GlobalBindings, PipelineError, PipelineManager, RenderPipelineDescriptor,
@@ -33,8 +34,8 @@ impl TerrainRenderer {
             RenderPipelineDescriptor {
                 debug_label: "Terrain".to_owned(),
                 layout: pipeline_layout,
-                vertex_shader: ShaderEntryPoint::first_in("Terrain.wgsl"),
-                fragment_shader: ShaderEntryPoint::first_in("Terrain.wgsl"),
+                vertex_shader: ShaderEntryPoint::first_in("terrain.wgsl"),
+                fragment_shader: ShaderEntryPoint::first_in("terrain.wgsl"),
                 fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -42,7 +43,7 @@ impl TerrainRenderer {
                     //polygon_mode: wgpu::PolygonMode::Line,
                     ..Default::default()
                 },
-                depth_stencil: None,
+                depth_stencil: Some(PrimaryDepthBuffer::STATE_WRITE),
                 multisample: wgpu::MultisampleState::default(),
             },
         )?;
@@ -62,10 +63,15 @@ impl TerrainRenderer {
     ) -> Result<(), PipelineError> {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipeline)?;
 
+        let grid_size = 100;
+        let num_quads = grid_size * grid_size;
+        let num_triangles = num_quads * 2;
+        let num_vertices = num_triangles * 3;
+
         rpass.push_debug_group("Terrain");
         rpass.set_bind_group(1, &self.bindgroup, &[]);
         rpass.set_pipeline(pipeline);
-        rpass.draw(0..6, 0..1);
+        rpass.draw(0..num_vertices, 0..1);
         rpass.pop_debug_group();
 
         Ok(())

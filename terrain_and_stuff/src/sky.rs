@@ -1,4 +1,5 @@
 use crate::{
+    primary_depth_buffer::PrimaryDepthBuffer,
     render_output::HdrBackbuffer,
     resource_managers::{
         GlobalBindings, PipelineError, PipelineManager, RenderPipelineDescriptor,
@@ -98,10 +99,11 @@ impl Sky {
                     fragment_shader: ShaderEntryPoint::first_in("sky/raymarch_sky.wgsl"),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
+                    depth_stencil: Some(PrimaryDepthBuffer::STATE_IGNORE),
                     multisample: wgpu::MultisampleState::default(),
                 },
             )?;
+
             let raymarch_bindgroup = BindGroupBuilder::new(&raymarch_bindings)
                 .texture(&transmittance_lut)
                 .create(device, "sky/raymarch_sky");

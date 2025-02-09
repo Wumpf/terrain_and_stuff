@@ -6,6 +6,7 @@ mod main_web;
 mod shaders_embedded;
 
 mod camera;
+mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
 mod result_ext;
@@ -22,6 +23,7 @@ use std::sync::{atomic::AtomicU64, Arc};
 use web_time::Instant;
 
 use camera::Camera;
+use primary_depth_buffer::PrimaryDepthBuffer;
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{GlobalBindings, PipelineManager};
 use result_ext::ResultExt;
@@ -36,6 +38,7 @@ struct Application<'a> {
     screen: Screen<'a>,
     global_bindings: GlobalBindings,
     hdr_backbuffer: HdrBackbuffer,
+    primary_depth_buffer: PrimaryDepthBuffer,
 
     sky: Sky,
     terrain: TerrainRenderer,
@@ -106,7 +109,8 @@ impl<'a> Application<'a> {
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
                     // Useful for debugging.
-                    // required_features: wgpu::Features::POLYGON_MODE_LINE,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    required_features: wgpu::Features::POLYGON_MODE_LINE,
                     ..Default::default()
                 },
                 None,
@@ -141,6 +145,7 @@ impl<'a> Application<'a> {
 
         let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
         let screen = Screen::new(&device, &adapter, surface, resolution);
+        let primary_depth_buffer = PrimaryDepthBuffer::new(&device, resolution);
         let global_bindings = GlobalBindings::new(&device);
         let hdr_backbuffer = HdrBackbuffer::new(
             &device,
@@ -159,6 +164,7 @@ impl<'a> Application<'a> {
             screen,
             global_bindings,
             hdr_backbuffer,
+            primary_depth_buffer,
             sky,
             terrain,
             window,
@@ -195,6 +201,7 @@ impl<'a> Application<'a> {
             self.screen.on_resize(&self.device, current_resolution);
             self.hdr_backbuffer
                 .on_resize(&self.device, current_resolution);
+            self.primary_depth_buffer = PrimaryDepthBuffer::new(&self.device, current_resolution);
         }
 
         self.camera.update(delta_time, &self.window);
@@ -275,10 +282,19 @@ impl<'a> Application<'a> {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: self.primary_depth_buffer.view(),
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
+                    // Need to store depth for sky raymarching.
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
         hdr_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
         // TODO: draw sky after solid geometry once depth buffer is established.
