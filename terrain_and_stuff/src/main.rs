@@ -81,7 +81,7 @@ impl<'a> Application<'a> {
         //
         // SAFETY:
         // * The window handles are valid at this point
-        // * The window is guranteed to outlive the surface since we're ensuring so in `Application's` Drop impl
+        // * The window is guaranteed to outlive the surface since we're ensuring so in `Application's` Drop impl
         let surface = unsafe {
             instance.create_surface_unsafe(
                 wgpu::SurfaceTargetUnsafe::from_window(&window)

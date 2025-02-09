@@ -37,12 +37,12 @@ var transmittance_lut: texture_2d<f32>;
 const NumScatteringSteps: f32 = 64.0;
 
 fn sample_transmittance_lut(altitude_km: f32, dir_to_sun: vec3f) -> vec3f {
-    // See `transmittance_lut.wgsl` for what it is we're sampling here!
+    // See `transmittance_lut.wgsl#ray_to_sun_texcoord` for what it is we're sampling here!
     // u coordinate is mapped to the cos(zenith angle)
     // v coordinate is mapped to the altitude from ground top atmosphere top.
     let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
-    let relative_altitude = altitude_km / (atmosphere_radius_km - ground_radius_km);
-    let texcoord = vec2f(sun_cos_zenith_angle * 0.5 + 0.5, relative_altitude);
+    let relative_altitude = sqrt(altitude_km / (atmosphere_radius_km - ground_radius_km));
+    let texcoord = vec2f(pow(sun_cos_zenith_angle, 1.0/5.0) * 0.5 + 0.5, relative_altitude);
 
     return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }
@@ -60,7 +60,7 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
     const sample_segment_t: f32 = 0.3;
 
     // For our camera we generally assume a flat planet.
-    // But as we march through the atmosphere, we have to take into account that the atmsophere is curved.
+    // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
     let planet_relative_position_km = vec3(0.0, camera_ray.origin.y * 0.001 + ground_radius_km, 0.0);
 
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
@@ -84,6 +84,9 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
         let rayleigh_inscattering = scattering.rayleigh * (rayleigh_phase * sun_transmittance + psi_multiple_scattering);
         let mie_inscattering = scattering.mie * (mie_phase * sun_transmittance + psi_multiple_scattering);
         let inscattering = rayleigh_inscattering + mie_inscattering;
+
+        // TODO:
+        //let inscattering = vec3f(0.0);
 
         // Integrated scattering within path segment.
         let scattering_integral = (inscattering - inscattering * sample_transmittance) / scattering.total_extinction;
