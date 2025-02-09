@@ -69,7 +69,7 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
         t = t_new;
 
         let new_planet_relative_position_km = planet_relative_position_km + t * camera_ray.direction;
-        let altitude_km = max(0.0, length(new_planet_relative_position_km) - ground_radius_km);
+        let altitude_km = clamp(length(new_planet_relative_position_km), ground_radius_km, atmosphere_radius_km) - ground_radius_km;
 
         let scattering = scattering_values_for(altitude_km);
         let sample_transmittance = exp(-dt * scattering.total_extinction);
