@@ -47,7 +47,7 @@ fn sample_transmittance_lut(altitude_km: f32, dir_to_sun: vec3f) -> vec3f {
     return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }
 
-fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance_km: f32) -> vec3f {
+fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_to_sun: vec3f, max_marching_distance_km: f32) -> vec3f {
     let cos_theta = dot(camera_ray.direction, dir_to_sun);
 
     let mie_phase = mie_phase(cos_theta);
@@ -58,10 +58,6 @@ fn raymarch_scattering(camera_ray: Ray, dir_to_sun: vec3f, max_marching_distance
     var t = 0.0;
 
     const sample_segment_t: f32 = 0.3;
-
-    // For our camera we generally assume a flat planet.
-    // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
-    let planet_relative_position_km = vec3(0.0, camera_ray.origin.y * 0.001 + ground_radius_km, 0.0);
 
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
         let t_new = ((i + sample_segment_t) / NumScatteringSteps) * max_marching_distance_km;
@@ -112,15 +108,18 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
     let dir_to_sun = normalize(vec3f(0.0, 2.0, 30.0)); // TODO:
 
+    // For our camera we generally assume a flat planet.
+    // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
+    let planet_relative_position_km = vec3(0.0, max(0.0, camera_ray.origin.y * 0.001) + ground_radius_km, 0.0);
+
     // Figure out where the ray hits either the planet or the atmosphere end.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
-    let pos_on_planet_km = (vec3f(0.0, ground_radius_km, 0.0) + camera_ray.origin * 0.001);
-    let ray_to_sun = Ray(pos_on_planet_km, dir_to_sun);
-    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun, atmosphere_radius_km);
-    let ground_distance_km = ray_sphere_intersect(ray_to_sun, ground_radius_km);
+    let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
+    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_radius_km);
+    let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
     let max_marching_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
 
-    let luminance = raymarch_scattering(camera_ray, dir_to_sun, max_marching_distance_km);
+    let luminance = raymarch_scattering(camera_ray, planet_relative_position_km, dir_to_sun, max_marching_distance_km);
 
     // Check this last, so everything above is uniform control flow.
     if atmosphere_distance_km < 0.0 {
@@ -132,6 +131,5 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
     // DEBUG:
     //return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0);
-
     //return vec4f(camera_ray.direction, 1.0);
 }
