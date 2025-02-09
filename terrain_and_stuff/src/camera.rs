@@ -27,9 +27,12 @@ impl Camera {
         local_movement.y += window.is_key_down(minifb::Key::E) as i32 as f32;
         local_movement = local_movement.normalize_or_zero();
 
-        let mut speed = 10.0;
+        let mut speed = 100.0;
         if window.is_key_down(minifb::Key::LeftShift) {
-            speed *= 10.0;
+            speed *= 100.0;
+        }
+        if window.is_key_down(minifb::Key::LeftCtrl) {
+            speed *= 0.1;
         }
 
         let world_movement = self.world_from_view_rot * (speed * local_movement);
