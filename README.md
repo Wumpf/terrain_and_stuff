@@ -18,3 +18,5 @@ Various implementations exists:
 * [official demo implementation](https://github.com/sebh/UnrealEngineSkyAtmosphere) by Sébastien himself.
 * [Andrew Helmer's ShaderToy](https://www.shadertoy.com/view/slSXRW).
 * [Lukas Herzbeger's rigorous WebGPU implementation](https://github.com/JolifantoBambla/webgpu-sky-atmosphere) with many different configuration options and compute shader variants
+
+TODO: haven't implemented the whole thing yet (multiple scattering is missing for instance), also there seems to be some issues.
