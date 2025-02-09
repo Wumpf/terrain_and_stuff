@@ -36,7 +36,12 @@ impl TerrainRenderer {
                 vertex_shader: ShaderEntryPoint::first_in("Terrain.wgsl"),
                 fragment_shader: ShaderEntryPoint::first_in("Terrain.wgsl"),
                 fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
-                primitive: wgpu::PrimitiveState::default(),
+                primitive: wgpu::PrimitiveState {
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    //polygon_mode: wgpu::PolygonMode::Line,
+                    ..Default::default()
+                },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
             },

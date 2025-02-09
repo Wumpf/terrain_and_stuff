@@ -105,6 +105,8 @@ impl<'a> Application<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
+                    // Useful for debugging.
+                    // required_features: wgpu::Features::POLYGON_MODE_LINE,
                     ..Default::default()
                 },
                 None,
