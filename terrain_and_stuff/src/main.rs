@@ -10,21 +10,23 @@ mod render_output;
 mod resource_managers;
 mod result_ext;
 mod sky;
+mod terrain;
 mod wgpu_error_handling;
 mod wgpu_utils;
 
 // -----------------------------------------
 
+use anyhow::Context;
+use minifb::{Window, WindowOptions};
 use std::sync::{atomic::AtomicU64, Arc};
 use web_time::Instant;
 
-use anyhow::Context;
 use camera::Camera;
-use minifb::{Window, WindowOptions};
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{GlobalBindings, PipelineManager};
 use result_ext::ResultExt;
 use sky::Sky;
+use terrain::TerrainRenderer;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
 const WIDTH: usize = 1920;
@@ -34,7 +36,9 @@ struct Application<'a> {
     screen: Screen<'a>,
     global_bindings: GlobalBindings,
     hdr_backbuffer: HdrBackbuffer,
+
     sky: Sky,
+    terrain: TerrainRenderer,
 
     window: Window,
     adapter: wgpu::Adapter,
@@ -143,14 +147,18 @@ impl<'a> Application<'a> {
             screen.surface_format(),
         )
         .context("Create HDR backbuffer & display transform pipeline")?;
+
         let sky = Sky::new(&device, &global_bindings, &mut pipeline_manager)
             .context("Create sky renderer")?;
+        let terrain = TerrainRenderer::new(&device, &global_bindings, &mut pipeline_manager)
+            .context("Create terrain renderer")?;
 
         Ok(Application {
             screen,
             global_bindings,
             hdr_backbuffer,
             sky,
+            terrain,
             window,
 
             adapter,
@@ -270,7 +278,13 @@ impl<'a> Application<'a> {
             occlusion_query_set: None,
         });
         hdr_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
+
+        // TODO: draw sky after solid geometry once depth buffer is established.
         self.sky
+            .draw(&mut hdr_rpass, &self.pipeline_manager)
+            .ok_or_log("draw sky");
+
+        self.terrain
             .draw(&mut hdr_rpass, &self.pipeline_manager)
             .ok_or_log("draw sky");
     }
