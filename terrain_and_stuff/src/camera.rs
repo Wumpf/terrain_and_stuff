@@ -4,13 +4,13 @@ pub struct Camera {
     last_mouse_pos: Option<(f32, f32)>,
 }
 
-const FOV_RADIANS: f32 = 70.0 / std::f32::consts::TAU;
+const FOV_RADIANS: f32 = 45.0 / std::f32::consts::TAU;
 const UP: glam::Vec3 = glam::Vec3::Y;
 
 impl Camera {
     pub fn new() -> Self {
         Self {
-            position: glam::vec3(0.0, 1.0, 0.0),
+            position: glam::vec3(0.0, 0.0, 0.0),
             world_from_view_rot: glam::Quat::IDENTITY,
             last_mouse_pos: None,
         }
@@ -19,21 +19,18 @@ impl Camera {
     pub fn update(&mut self, delta_time: f32, window: &minifb::Window) {
         // X=right, Y=up, Z=back
         let mut local_movement = glam::Vec3::ZERO;
-        local_movement.z +=
-            window.is_key_pressed(minifb::Key::W, minifb::KeyRepeat::No) as i32 as f32;
-        local_movement.z -=
-            window.is_key_pressed(minifb::Key::S, minifb::KeyRepeat::No) as i32 as f32;
-        local_movement.x -=
-            window.is_key_pressed(minifb::Key::A, minifb::KeyRepeat::No) as i32 as f32;
-        local_movement.x +=
-            window.is_key_pressed(minifb::Key::D, minifb::KeyRepeat::No) as i32 as f32;
-        local_movement.y -=
-            window.is_key_pressed(minifb::Key::Q, minifb::KeyRepeat::No) as i32 as f32;
-        local_movement.y +=
-            window.is_key_pressed(minifb::Key::E, minifb::KeyRepeat::No) as i32 as f32;
+        local_movement.z += window.is_key_down(minifb::Key::W) as i32 as f32;
+        local_movement.z -= window.is_key_down(minifb::Key::S) as i32 as f32;
+        local_movement.x -= window.is_key_down(minifb::Key::A) as i32 as f32;
+        local_movement.x += window.is_key_down(minifb::Key::D) as i32 as f32;
+        local_movement.y -= window.is_key_down(minifb::Key::Q) as i32 as f32;
+        local_movement.y += window.is_key_down(minifb::Key::E) as i32 as f32;
         local_movement = local_movement.normalize_or_zero();
 
-        let speed = 10.0;
+        let mut speed = 10.0;
+        if window.is_key_down(minifb::Key::LeftShift) {
+            speed *= 10.0;
+        }
 
         let world_movement = self.world_from_view_rot * (speed * local_movement);
         self.position += world_movement * delta_time;
