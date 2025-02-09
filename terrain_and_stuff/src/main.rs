@@ -15,10 +15,8 @@ mod wgpu_utils;
 
 // -----------------------------------------
 
-use std::{
-    sync::{atomic::AtomicU64, Arc},
-    time::Instant,
-};
+use std::sync::{atomic::AtomicU64, Arc};
+use web_time::Instant;
 
 use anyhow::Context;
 use camera::Camera;

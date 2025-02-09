@@ -117,15 +117,17 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
     let pos_on_planet_km = (vec3f(0.0, ground_radius_km, 0.0) + camera_ray.origin * 0.001);
     let ray_to_sun = Ray(pos_on_planet_km, dir_to_sun);
     let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun, atmosphere_radius_km);
+    let ground_distance_km = ray_sphere_intersect(ray_to_sun, ground_radius_km);
+    let max_marching_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
+
+    let luminance = raymarch_scattering(camera_ray, dir_to_sun, max_marching_distance_km);
+
+    // Check this last, so everything above is uniform control flow.
     if atmosphere_distance_km < 0.0 {
         // This shader isn't equipped for views outside of the atmosphere.
         return ERROR_RGBA;
     }
-    let ground_distance_km = ray_sphere_intersect(ray_to_sun, ground_radius_km);
-    let max_marching_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
 
-
-    let luminance = raymarch_scattering(camera_ray, dir_to_sun, max_marching_distance_km);
     return vec4f(luminance, 1.0);
 
     // DEBUG:
