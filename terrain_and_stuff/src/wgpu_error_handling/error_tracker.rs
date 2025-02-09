@@ -119,11 +119,11 @@ impl ErrorTracker {
                 #[cfg(not(target_arch = "wasm32"))]
                 let ctx_err = {
                     let ctx_err = _source
-                        .downcast::<wgpu::core::error::ContextError>()
+                        .downcast::<wgpu::wgc::error::ContextError>()
                         .expect("Expected wgpu core error");
                     if ctx_err
                         .source
-                        .downcast_ref::<wgpu::core::command::CommandEncoderError>()
+                        .downcast_ref::<wgpu::wgc::command::CommandEncoderError>()
                         .is_some()
                     {
                         // Actual command encoder errors never carry any meaningful

@@ -59,7 +59,7 @@ impl<'a> Application<'a> {
     /// There's various ways for this to fail, all of which are handled via `expect` right now.
     /// Of course there's be better ways to handle these (e.g. show something nice on screen or try a bit harder).
     async fn new() -> anyhow::Result<Self> {
-        let instance = wgpu::util::new_instance_with_webgpu_detection(wgpu::InstanceDescriptor {
+        let instance = wgpu::util::new_instance_with_webgpu_detection(&wgpu::InstanceDescriptor {
             // Kick out DX12 & GL to limit variation - GL isn't terribly stable and feature complete, DX12 is always pain with shader compilation.
             backends: wgpu::Backends::VULKAN
                 | wgpu::Backends::METAL

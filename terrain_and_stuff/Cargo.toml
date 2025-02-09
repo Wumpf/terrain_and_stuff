@@ -4,37 +4,41 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = { version = "23", default-features = false, features = [
+wgpu = { version = "24", default-features = false, features = [
     # We use naga_oil, so we directly use naga-ir for shader creation.
     "naga-ir",
     # No WebGL supported!
     "webgpu",
     # Don't care about DX12, using Vulkan limits variety more.
     "metal",
+    # Shaders are in wgsl.
+    "wgsl",
     # No time for Send/Sync headaches on the web.
     "fragile-send-sync-non-atomic-wasm",
+
 ] }
 
 anyhow = "1.0.90"
 bytemuck = { version = "1.12.3", features = ["derive"] }
 glam = "0.29.0"
-itertools = "0.13.0"
+itertools = "0.14.0"
 log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.
-minifb = "0.27.0"
-naga_oil = { version = "0.16.0", default-features = false }
+minifb = "0.28.0"
+naga_oil = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.3"
 slotmap = "1.0.7"
-thiserror = "2.0.7"
-web-time = "1.1.0"
+thiserror = "2.0.11"
+web-time = { version = "1.1.0", default-features = false }
+
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Native only dependencies.
 pollster = "0.4.0"
-env_logger = { version = "0.11.5", default-features = false, features = [
+env_logger = { version = "0.11.6", default-features = false, features = [
     "auto-color",
     "humantime",
 ] }
-notify = "7.0.0"
+notify = "8.0.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
