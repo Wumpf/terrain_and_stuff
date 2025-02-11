@@ -108,9 +108,10 @@ impl<'a> Application<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
+                    required_features: wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING.into(),
                     // Useful for debugging.
-                    #[cfg(not(target_arch = "wasm32"))]
-                    required_features: wgpu::Features::POLYGON_MODE_LINE,
+                    //#[cfg(not(target_arch = "wasm32"))]
+                    //required_features: wgpu::FeaturesWebGPU::POLYGON_MODE_LINE,
                     ..Default::default()
                 },
                 None,

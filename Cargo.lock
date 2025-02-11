@@ -879,7 +879,28 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "24.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?branch=trunk#8e235b4d922bed4359fd200ae49d1fdccefb097e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e380993072e52eef724eddfcde0ed013b0c023c3f0417336ed041aa9f076994e"
+dependencies = [
+ "arrayvec",
+ "bit-set 0.8.0",
+ "bitflags 2.8.0",
+ "cfg_aliases",
+ "codespan-reporting",
+ "hexf-parse",
+ "indexmap",
+ "log",
+ "rustc-hash",
+ "strum",
+ "termcolor",
+ "thiserror 2.0.11",
+ "unicode-xid",
+]
+
+[[package]]
+name = "naga"
+version = "24.0.0"
+source = "git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c#e6cd0bea01e1dae30628a79b2d9ab97a353f350c"
 dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
@@ -908,7 +929,7 @@ dependencies = [
  "codespan-reporting",
  "data-encoding",
  "indexmap",
- "naga",
+ "naga 24.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell",
  "regex",
  "regex-syntax",
@@ -1677,7 +1698,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "24.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?branch=trunk#8e235b4d922bed4359fd200ae49d1fdccefb097e"
+source = "git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c#e6cd0bea01e1dae30628a79b2d9ab97a353f350c"
 dependencies = [
  "arrayvec",
  "bitflags 2.8.0",
@@ -1686,7 +1707,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "js-sys",
  "log",
- "naga",
+ "naga 24.0.0 (git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c)",
  "parking_lot",
  "profiling",
  "raw-window-handle",
@@ -1703,7 +1724,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "24.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?branch=trunk#8e235b4d922bed4359fd200ae49d1fdccefb097e"
+source = "git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c#e6cd0bea01e1dae30628a79b2d9ab97a353f350c"
 dependencies = [
  "arrayvec",
  "bit-vec 0.8.0",
@@ -1713,7 +1734,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "indexmap",
  "log",
- "naga",
+ "naga 24.0.0 (git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c)",
  "once_cell",
  "parking_lot",
  "profiling",
@@ -1728,7 +1749,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "24.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?branch=trunk#8e235b4d922bed4359fd200ae49d1fdccefb097e"
+source = "git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c#e6cd0bea01e1dae30628a79b2d9ab97a353f350c"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -1749,7 +1770,7 @@ dependencies = [
  "libloading",
  "log",
  "metal",
- "naga",
+ "naga 24.0.0 (git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c)",
  "ndk-sys",
  "objc",
  "once_cell",
@@ -1770,7 +1791,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "24.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?branch=trunk#8e235b4d922bed4359fd200ae49d1fdccefb097e"
+source = "git+https://github.com/wumpf/wgpu?rev=e6cd0bea01e1dae30628a79b2d9ab97a353f350c#e6cd0bea01e1dae30628a79b2d9ab97a353f350c"
 dependencies = [
  "bitflags 2.8.0",
  "js-sys",
