@@ -6,8 +6,8 @@
 #import "constants.wgsl"::{ERROR_RGBA, TAU}
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 
-#import "sky/scattering.wgsl"::{scattering_values_for, ScatteringValues}
-#import "sky/constants.wgsl"::{
+#import "atmosphere/scattering.wgsl"::{scattering_values_for, ScatteringValues}
+#import "atmosphere/constants.wgsl"::{
     ground_radius_km,
     atmosphere_radius_km,
 }

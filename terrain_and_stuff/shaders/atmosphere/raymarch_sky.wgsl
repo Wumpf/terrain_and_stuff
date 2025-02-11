@@ -22,8 +22,8 @@
 #import "global_bindings.wgsl"::{trilinear_sampler_clamp, frame}
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 
-#import "sky/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
-#import "sky/constants.wgsl"::{
+#import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
+#import "atmosphere/constants.wgsl"::{
     ground_radius_km,
     atmosphere_radius_km,
     sun_diameteter_rad,

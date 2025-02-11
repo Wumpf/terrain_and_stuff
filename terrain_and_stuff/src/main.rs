@@ -5,12 +5,12 @@ mod main_web;
 #[cfg(target_arch = "wasm32")]
 mod shaders_embedded;
 
+mod atmosphere;
 mod camera;
 mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
 mod result_ext;
-mod sky;
 mod terrain;
 mod wgpu_error_handling;
 mod wgpu_utils;
@@ -22,12 +22,12 @@ use minifb::{Window, WindowOptions};
 use std::sync::{atomic::AtomicU64, Arc};
 use web_time::Instant;
 
+use atmosphere::Atmosphere;
 use camera::Camera;
 use primary_depth_buffer::PrimaryDepthBuffer;
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{GlobalBindings, PipelineManager};
 use result_ext::ResultExt;
-use sky::Sky;
 use terrain::TerrainRenderer;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
@@ -40,7 +40,7 @@ struct Application<'a> {
     hdr_backbuffer: HdrBackbuffer,
     primary_depth_buffer: PrimaryDepthBuffer,
 
-    sky: Sky,
+    atmosphere: Atmosphere,
     terrain: TerrainRenderer,
 
     window: Window,
@@ -135,7 +135,7 @@ impl<'a> Application<'a> {
         )
         .context("Create HDR backbuffer & display transform pipeline")?;
 
-        let sky = Sky::new(
+        let atmosphere = Atmosphere::new(
             &device,
             &global_bindings,
             &mut pipeline_manager,
@@ -170,7 +170,7 @@ impl<'a> Application<'a> {
             global_bindings,
             hdr_backbuffer,
             primary_depth_buffer,
-            sky,
+            atmosphere,
             terrain,
             window,
 
@@ -207,7 +207,8 @@ impl<'a> Application<'a> {
             self.hdr_backbuffer
                 .on_resize(&self.device, current_resolution);
             self.primary_depth_buffer = PrimaryDepthBuffer::new(&self.device, current_resolution);
-            self.sky.on_resize(&self.device, &self.primary_depth_buffer);
+            self.atmosphere
+                .on_resize(&self.device, &self.primary_depth_buffer);
         }
 
         self.camera.update(delta_time, &self.window);
@@ -274,7 +275,7 @@ impl<'a> Application<'a> {
     }
 
     fn draw_scene(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        self.sky
+        self.atmosphere
             .prepare(encoder, &self.pipeline_manager)
             .ok_or_log("prepare sky");
 
@@ -327,7 +328,7 @@ impl<'a> Application<'a> {
 
             hdr_rpass_without_depth.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
-            self.sky
+            self.atmosphere
                 .draw(&mut hdr_rpass_without_depth, &self.pipeline_manager)
                 .ok_or_log("draw sky");
         }

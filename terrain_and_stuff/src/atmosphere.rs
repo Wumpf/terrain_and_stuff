@@ -8,7 +8,7 @@ use crate::{
     wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc},
 };
 
-pub struct Sky {
+pub struct Atmosphere {
     render_pipe_transmittance_lut: RenderPipelineHandle,
     render_pipe_raymarch_sky: RenderPipelineHandle,
 
@@ -18,7 +18,7 @@ pub struct Sky {
     transmittance_lut: wgpu::TextureView,
 }
 
-impl Sky {
+impl Atmosphere {
     const TRANSMITTANCE_LUT_SIZE: wgpu::Extent3d = wgpu::Extent3d {
         width: 256,
         height: 64,
@@ -56,10 +56,12 @@ impl Sky {
             let render_pipe_transmittance_lut = pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
-                    debug_label: "sky/transmittance_lut".to_owned(),
+                    debug_label: "atmosphere/transmittance_lut".to_owned(),
                     layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in("sky/transmittance_lut.wgsl"),
+                    fragment_shader: ShaderEntryPoint::first_in(
+                        "atmosphere/transmittance_lut.wgsl",
+                    ),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -78,7 +80,7 @@ impl Sky {
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 })
-                .create(device, "sky/raymarch_sky");
+                .create(device, "atmosphere/raymarch_sky");
 
             (
                 transmittance_lut,
@@ -100,10 +102,10 @@ impl Sky {
             pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
-                    debug_label: "sky/raymarch_sky".to_owned(),
+                    debug_label: "atmosphere/raymarch_sky".to_owned(),
                     layout: raymarch_layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in("sky/raymarch_sky.wgsl"),
+                    fragment_shader: ShaderEntryPoint::first_in("atmosphere/raymarch_sky.wgsl"),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -136,7 +138,7 @@ impl Sky {
         BindGroupBuilder::new(&raymarch_bindings)
             .texture(&transmittance_lut)
             .texture(&primary_depth_buffer.view())
-            .create(device, "sky/raymarch_sky")
+            .create(device, "atmosphere/raymarch_sky")
     }
 
     pub fn on_resize(&mut self, device: &wgpu::Device, primary_depth_buffer: &PrimaryDepthBuffer) {
@@ -154,7 +156,7 @@ impl Sky {
         pipeline_manager: &PipelineManager,
     ) -> Result<(), PipelineError> {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("sky/transmittance_lut"),
+            label: Some("atmosphere/transmittance_lut"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &self.transmittance_lut,
                 resolve_target: None,
@@ -183,7 +185,7 @@ impl Sky {
     ) -> Result<(), PipelineError> {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_raymarch_sky)?;
 
-        rpass.push_debug_group("sky/raymarch_sky");
+        rpass.push_debug_group("atmosphere/raymarch_sky");
         rpass.set_bind_group(1, &self.raymarch_bindgroup, &[]);
         rpass.set_pipeline(pipeline);
         rpass.draw(0..3, 0..1);

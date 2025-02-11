@@ -1,5 +1,5 @@
 #import "constants.wgsl"::{TAU}
-#import "sky/constants.wgsl"::{
+#import "atmosphere/constants.wgsl"::{
     ground_radius_km,
     rayleigh_scale_height,
     rayleigh_scattering_per_km_density,
