@@ -121,7 +121,31 @@ impl<'a> Application<'a> {
         // Make all errors forward to the console before panicking, this way they also show up on the web!
         let error_tracker = Arc::new(ErrorTracker::default());
 
-        // Make sure to catch all errors, never crash, and deduplicate reported errors.
+        let mut pipeline_manager = PipelineManager::new().context("Create pipeline manager")?;
+
+        let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
+        let screen = Screen::new(&device, &adapter, surface, resolution);
+        let primary_depth_buffer = PrimaryDepthBuffer::new(&device, resolution);
+        let global_bindings = GlobalBindings::new(&device);
+        let hdr_backbuffer = HdrBackbuffer::new(
+            &device,
+            resolution,
+            &mut pipeline_manager,
+            screen.surface_format(),
+        )
+        .context("Create HDR backbuffer & display transform pipeline")?;
+
+        let sky = Sky::new(
+            &device,
+            &global_bindings,
+            &mut pipeline_manager,
+            &primary_depth_buffer,
+        )
+        .context("Create sky renderer")?;
+        let terrain = TerrainRenderer::new(&device, &global_bindings, &mut pipeline_manager)
+            .context("Create terrain renderer")?;
+
+        // Now that initialization is over (!), make sure to catch all errors, never crash, and deduplicate reported errors.
         // `on_uncaptured_error` is a last-resort handler which we should never hit,
         // since there should always be an open error scope.
         //
@@ -140,25 +164,6 @@ impl<'a> Application<'a> {
                 );
             })
         });
-
-        let mut pipeline_manager = PipelineManager::new().context("Create pipeline manager")?;
-
-        let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
-        let screen = Screen::new(&device, &adapter, surface, resolution);
-        let primary_depth_buffer = PrimaryDepthBuffer::new(&device, resolution);
-        let global_bindings = GlobalBindings::new(&device);
-        let hdr_backbuffer = HdrBackbuffer::new(
-            &device,
-            resolution,
-            &mut pipeline_manager,
-            screen.surface_format(),
-        )
-        .context("Create HDR backbuffer & display transform pipeline")?;
-
-        let sky = Sky::new(&device, &global_bindings, &mut pipeline_manager)
-            .context("Create sky renderer")?;
-        let terrain = TerrainRenderer::new(&device, &global_bindings, &mut pipeline_manager)
-            .context("Create terrain renderer")?;
 
         Ok(Application {
             screen,
@@ -202,6 +207,7 @@ impl<'a> Application<'a> {
             self.hdr_backbuffer
                 .on_resize(&self.device, current_resolution);
             self.primary_depth_buffer = PrimaryDepthBuffer::new(&self.device, current_resolution);
+            self.sky.on_resize(&self.device, &self.primary_depth_buffer);
         }
 
         self.camera.update(delta_time, &self.window);
@@ -272,39 +278,59 @@ impl<'a> Application<'a> {
             .prepare(encoder, &self.pipeline_manager)
             .ok_or_log("prepare sky");
 
-        let mut hdr_rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Primary HDR render pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: self.hdr_backbuffer.texture_view(),
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: self.primary_depth_buffer.view(),
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
-                    // Need to store depth for sky raymarching.
-                    store: wgpu::StoreOp::Store,
+        {
+            let mut hdr_rpass_with_depth = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Primary HDR render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: self.hdr_backbuffer.texture_view(),
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: self.primary_depth_buffer.view(),
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
+                        // Need to store depth for sky raymarching.
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
                 }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
-        hdr_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
+            hdr_rpass_with_depth.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
-        // TODO: draw sky after solid geometry once depth buffer is established.
-        self.sky
-            .draw(&mut hdr_rpass, &self.pipeline_manager)
-            .ok_or_log("draw sky");
+            self.terrain
+                .draw(&mut hdr_rpass_with_depth, &self.pipeline_manager)
+                .ok_or_log("draw sky");
+        }
+        {
+            let mut hdr_rpass_without_depth =
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Primary HDR render pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: self.hdr_backbuffer.texture_view(),
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
 
-        self.terrain
-            .draw(&mut hdr_rpass, &self.pipeline_manager)
-            .ok_or_log("draw sky");
+            hdr_rpass_without_depth.set_bind_group(0, &self.global_bindings.bind_group, &[]);
+
+            self.sky
+                .draw(&mut hdr_rpass_without_depth, &self.pipeline_manager)
+                .ok_or_log("draw sky");
+        }
     }
 }
 

@@ -5,13 +5,14 @@ use crate::{
         GlobalBindings, PipelineError, PipelineManager, RenderPipelineDescriptor,
         RenderPipelineHandle, ShaderEntryPoint,
     },
-    wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder},
+    wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc},
 };
 
 pub struct Sky {
     render_pipe_transmittance_lut: RenderPipelineHandle,
     render_pipe_raymarch_sky: RenderPipelineHandle,
 
+    raymarch_bindgroup_layout: BindGroupLayoutWithDesc,
     raymarch_bindgroup: wgpu::BindGroup,
 
     transmittance_lut: wgpu::TextureView,
@@ -28,9 +29,10 @@ impl Sky {
         device: &wgpu::Device,
         global_bindings: &GlobalBindings,
         pipeline_manager: &mut PipelineManager,
+        primary_depth_buffer: &PrimaryDepthBuffer,
     ) -> Result<Self, PipelineError> {
         // Transmittance.
-        let (transmittance_lut, render_pipe_transmittance_lut, raymarch_bindings) = {
+        let (transmittance_lut, render_pipe_transmittance_lut, raymarch_bindgroup_layout) = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("EmptyLayout"),
                 bind_group_layouts: &[],
@@ -71,6 +73,11 @@ impl Sky {
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 })
+                .next_binding_fragment(wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                })
                 .create(device, "sky/raymarch_sky");
 
             (
@@ -81,16 +88,16 @@ impl Sky {
         };
 
         // Raymarch.
-        let (render_pipe_raymarch_sky, raymarch_bindgroup) = {
+        let render_pipe_raymarch_sky = {
             let raymarch_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("EmptyLayout"),
                 bind_group_layouts: &[
                     &global_bindings.bind_group_layout.layout,
-                    &raymarch_bindings.layout,
+                    &raymarch_bindgroup_layout.layout,
                 ],
                 push_constant_ranges: &[],
             });
-            let render_pipe_raymarch_sky = pipeline_manager.create_render_pipeline(
+            pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
                     debug_label: "sky/raymarch_sky".to_owned(),
@@ -99,24 +106,46 @@ impl Sky {
                     fragment_shader: ShaderEntryPoint::first_in("sky/raymarch_sky.wgsl"),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(PrimaryDepthBuffer::STATE_IGNORE),
+                    depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                 },
-            )?;
-
-            let raymarch_bindgroup = BindGroupBuilder::new(&raymarch_bindings)
-                .texture(&transmittance_lut)
-                .create(device, "sky/raymarch_sky");
-
-            (render_pipe_raymarch_sky, raymarch_bindgroup)
+            )?
         };
+        let raymarch_bindgroup = Self::create_raymarch_bindgroup(
+            device,
+            &raymarch_bindgroup_layout,
+            &transmittance_lut,
+            primary_depth_buffer,
+        );
 
         Ok(Self {
             render_pipe_transmittance_lut,
             render_pipe_raymarch_sky,
+            raymarch_bindgroup_layout,
             raymarch_bindgroup,
             transmittance_lut,
         })
+    }
+
+    fn create_raymarch_bindgroup(
+        device: &wgpu::Device,
+        raymarch_bindings: &BindGroupLayoutWithDesc,
+        transmittance_lut: &wgpu::TextureView,
+        primary_depth_buffer: &PrimaryDepthBuffer,
+    ) -> wgpu::BindGroup {
+        BindGroupBuilder::new(&raymarch_bindings)
+            .texture(&transmittance_lut)
+            .texture(&primary_depth_buffer.view())
+            .create(device, "sky/raymarch_sky")
+    }
+
+    pub fn on_resize(&mut self, device: &wgpu::Device, primary_depth_buffer: &PrimaryDepthBuffer) {
+        self.raymarch_bindgroup = Self::create_raymarch_bindgroup(
+            device,
+            &self.raymarch_bindgroup_layout,
+            &self.transmittance_lut,
+            primary_depth_buffer,
+        );
     }
 
     pub fn prepare(
