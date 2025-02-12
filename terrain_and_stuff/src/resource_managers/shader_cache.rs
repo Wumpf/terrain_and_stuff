@@ -57,9 +57,10 @@ pub enum ShaderCacheError {
 
 impl ShaderCache {
     pub fn new() -> Self {
-        // TODO: set composor caps.
         Self {
-            composer: naga_oil::compose::Composer::default(),
+            composer: naga_oil::compose::Composer::default()
+                // TODO: set composor caps.
+                .with_capabilities(wgpu::naga::valid::Capabilities::all()),
 
             shader_sources: Default::default(),
             shader_modules: Default::default(),

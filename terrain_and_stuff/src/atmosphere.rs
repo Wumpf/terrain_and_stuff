@@ -106,7 +106,20 @@ impl Atmosphere {
                     layout: raymarch_layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
                     fragment_shader: ShaderEntryPoint::first_in("atmosphere/raymarch_sky.wgsl"),
-                    fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
+                    fragment_targets: vec![wgpu::ColorTargetState {
+                        format: HdrBackbuffer::FORMAT,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                // Use dual source blending:
+                                // color = src0 + src1 * dst
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::Src1,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),

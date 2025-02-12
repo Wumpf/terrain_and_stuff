@@ -7,12 +7,18 @@ default-members = ["terrain_and_stuff"]
 # Because someone gotta test the cutting edge!
 #wgpu = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
 #naga = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
-#naga_oil = { git = "https://github.com/wumpf/naga_oil", branch = "cutting-edge-wgpu" }
+naga_oil = { git = "https://github.com/wumpf/naga_oil", branch = "cutting-edge-wgpu" }
 
-wgpu = { git = "https://github.com/wumpf/wgpu", rev = "e6cd0bea01e1dae30628a79b2d9ab97a353f350c" }
-#wgpu-types = { git = "https://github.com/wumpf/wgpu", rev = "e6cd0bea01e1dae30628a79b2d9ab97a353f350c" }
-#naga = { git = "https://github.com/wumpf/wgpu", rev = "e6cd0bea01e1dae30628a79b2d9ab97a353f350c" }
-#wgpu-hal = { git = "https://github.com/wumpf/wgpu", rev = "e6cd0bea01e1dae30628a79b2d9ab97a353f350c" }
+wgpu = { git = "https://github.com/wumpf/wgpu", branch = "webgpu-dual-source-blending" }
+#wgpu-types = { git = "https://github.com/wumpf/wgpu", rev = "5a0699f589ebe69e391c3f3de82f3ace48492fc8" }
+naga = { git = "https://github.com/wumpf/wgpu", branch = "webgpu-dual-source-blending" }
+#wgpu-hal = { git = "https://github.com/wumpf/wgpu", rev = "5a0699f589ebe69e391c3f3de82f3ace48492fc8" }
 
+
+#wgpu = { path = "../wgpu/wgpu" }
+#wgpu-types = { path = "../wgpu/wgpu-types" }
+#naga = { path = "../wgpu/naga" }
+#wgpu-hal = { path = "../wgpu/wgpu-hal" }
+#naga_oil = { path = "../naga_oil" }
 
 #minifb = { path = "../rust_minifb" }

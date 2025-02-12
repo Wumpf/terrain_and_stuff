@@ -1,3 +1,5 @@
+enable dual_source_blending;
+
 // Raymarch the sky color using transmittance & multiple scattering luts.
 //
 // This is what gives us the final sky color and light scattering overlay.
@@ -39,6 +41,11 @@ var screen_depth: texture_2d<f32>;
 
 const NumScatteringSteps: f32 = 64.0;
 
+struct ScatteringResult {
+    @location(0) @blend_src(0) scattering : vec4f,
+    @location(0) @blend_src(1) transmittance : vec4f,
+}
+
 fn sample_transmittance_lut(altitude_km: f32, dir_to_sun: vec3f) -> vec3f {
     // See `transmittance_lut.wgsl#ray_to_sun_texcoord` for what it is we're sampling here!
     // u coordinate is mapped to the cos(zenith angle)
@@ -50,7 +57,7 @@ fn sample_transmittance_lut(altitude_km: f32, dir_to_sun: vec3f) -> vec3f {
     return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }
 
-fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_to_sun: vec3f, max_marching_distance_km: f32) -> vec3f {
+fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_to_sun: vec3f, max_marching_distance_km: f32) -> ScatteringResult {
     let cos_theta = dot(camera_ray.direction, dir_to_sun);
 
     let mie_phase = mie_phase(cos_theta);
@@ -102,18 +109,21 @@ fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_
     let antialiased_sun = saturate(sun / (fwidth(sun) * 1000.0));
     luminance += sun_unscattered_luminance * transmittance * antialiased_sun;
 
-    return luminance;
+    var result: ScatteringResult;
+    result.transmittance = vec4f(transmittance, 1.0);
+    result.scattering = vec4f(luminance, 1.0);
+    return result;
 }
 
 @fragment
-fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> @location(0) vec4<f32> {
+fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> ScatteringResult {
     // TODO: linearize.
     let scene_depth = textureLoad(screen_depth, vec2i(position.xy), 0).r;
 
     // TODO: overlay.
-    if scene_depth != 0.0 {
-        return vec4f(0.0, 0.0, 0.0, 0.0);
-    }
+    // if scene_depth != 0.0 {
+    //     return ScatteringResult(ERROR_RGBA, ERROR_RGBA);
+    // }
 
     let camera_ray = camera_ray_from_screenuv(texcoord);
 
@@ -130,22 +140,15 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
     let max_marching_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
 
-    let luminance = raymarch_scattering(camera_ray, planet_relative_position_km, dir_to_sun, max_marching_distance_km);
+    let result = raymarch_scattering(camera_ray, planet_relative_position_km, dir_to_sun, max_marching_distance_km);
 
     // WORKAROUND FOR CHROME:
     // Check this last, so everything above is uniform control flow.
     // (https://www.w3.org/TR/WGSL/#fwidth-builtin is supposed to return an indeterminate value in this case but accept the shader)
     if atmosphere_distance_km < 0.0 {
         // This shader isn't equipped for views outside of the atmosphere.
-        return ERROR_RGBA;
+        return ScatteringResult(ERROR_RGBA, ERROR_RGBA);
     }
 
-
-    // TODO: use dual source blending to blend with scene - there's an absorption part (multiply) and an addition part (additive).
-    return vec4f(luminance, 1.0);
-
-    // DEBUG:
-    //return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0);
-    //return vec4f(camera_ray.direction, 1.0);
-    //return vec4f(fract(scene_depth * 1000.0), 0.0, 0.0, 1.0);
+    return result;
 }
