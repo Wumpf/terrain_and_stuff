@@ -125,7 +125,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let view_space_position = view_space_position_from_depth_buffer(textureLoad(screen_depth, vec2i(position.xy), 0).r, texcoord);
     let geometry_distance_on_camera_ray = length(view_space_position);
 
-    let dir_to_sun = normalize(vec3f(0.0, 100.0, 30.0)); // TODO:
+    let dir_to_sun = normalize(vec3f(0.0, 10.0, 30.0)); // TODO:
 
     // For our camera we generally assume a flat planet.
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.

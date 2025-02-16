@@ -28,6 +28,7 @@ naga_oil = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.3"
 slotmap = "1.0.7"
 thiserror = "2.0.11"
+tiff = "0.9.1"
 web-time = { version = "1.1.0", default-features = false }
 
 

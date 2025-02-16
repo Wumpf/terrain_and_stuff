@@ -69,6 +69,7 @@ pub enum PipelineError {
 pub struct PipelineManager {
     shader_cache: ShaderCache,
     render_pipelines: slotmap::SlotMap<RenderPipelineHandle, RenderPipelineEntry>,
+    render_pipelines_with_broken_shaders: HashSet<RenderPipelineHandle>,
 
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     shader_change_rx: std::sync::mpsc::Receiver<PathBuf>,
@@ -120,6 +121,7 @@ impl PipelineManager {
         Ok(Self {
             shader_cache: ShaderCache::new(),
             render_pipelines: slotmap::SlotMap::default(),
+            render_pipelines_with_broken_shaders: HashSet::new(),
             //compute_pipelines: slotmap::SlotMap::default(),
             shader_change_rx,
             #[cfg(not(target_arch = "wasm32"))]
@@ -176,11 +178,16 @@ impl PipelineManager {
             let removed_shaders = self.shader_cache.remove_shader_for_path(relative_path);
 
             // Try to recreate all pipelines that use this shader.
-            for render_pipeline in self.render_pipelines.values_mut() {
-                if !removed_shaders
+            for (render_pipeline_handle, render_pipeline) in self.render_pipelines.iter_mut() {
+                let affected_by_removed_shaders = removed_shaders
                     .iter()
-                    .any(|removed_shader| render_pipeline.shader_handles.contains(&removed_shader))
-                {
+                    .any(|removed_shader| render_pipeline.shader_handles.contains(&removed_shader));
+                // Any pipeline that previously failed to reload no longer points to valid shaders which is why we have to check them separately.
+                let waiting_for_repaired_shader = !self
+                    .render_pipelines_with_broken_shaders
+                    .contains(&render_pipeline_handle);
+
+                if !affected_by_removed_shaders && !waiting_for_repaired_shader {
                     continue;
                 }
 
@@ -197,8 +204,9 @@ impl PipelineManager {
                         render_pipeline.shader_handles = shader_handles;
                     }
                     Err(err) => {
-                        // This actually shouldn't happen since errors on pipeline creation itself are usually delayed.
                         log::error!("Failed to recreate pipeline {label:?}:\n{err}");
+                        self.render_pipelines_with_broken_shaders
+                            .insert(render_pipeline_handle);
                         return; // Don't spam the user with errors for even more shaders.
                     }
                 }

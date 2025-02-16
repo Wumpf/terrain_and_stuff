@@ -143,8 +143,9 @@ impl<'a> Application<'a> {
             &primary_depth_buffer,
         )
         .context("Create sky renderer")?;
-        let terrain = TerrainRenderer::new(&device, &global_bindings, &mut pipeline_manager)
-            .context("Create terrain renderer")?;
+        let terrain =
+            TerrainRenderer::new(&device, &queue, &global_bindings, &mut pipeline_manager)
+                .context("Create terrain renderer")?;
 
         // Now that initialization is over (!), make sure to catch all errors, never crash, and deduplicate reported errors.
         // `on_uncaptured_error` is a last-resort handler which we should never hit,
@@ -313,7 +314,7 @@ impl<'a> Application<'a> {
         {
             let mut hdr_rpass_without_depth =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Primary HDR render pass"),
+                    label: Some("Atmosphere HDR render pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: self.hdr_backbuffer.texture_view(),
                         resolve_target: None,

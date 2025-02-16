@@ -29,11 +29,11 @@ impl Camera {
 
         let mut speed = 100.0;
         if window.is_key_down(minifb::Key::LeftShift) {
-            speed *= 100.0;
+            speed *= 10.0;
         } else if window.is_key_down(minifb::Key::LeftCtrl) {
             speed *= 0.1;
-        } else if window.is_key_down(minifb::Key::LeftAlt) {
-            speed *= 1000.0;
+        } else if window.is_key_down(minifb::Key::Space) {
+            speed *= 100.0;
         }
 
         let world_movement = self.world_from_view_rot * (speed * local_movement);
