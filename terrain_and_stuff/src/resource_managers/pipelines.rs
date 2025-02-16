@@ -183,7 +183,7 @@ impl PipelineManager {
                     .iter()
                     .any(|removed_shader| render_pipeline.shader_handles.contains(&removed_shader));
                 // Any pipeline that previously failed to reload no longer points to valid shaders which is why we have to check them separately.
-                let waiting_for_repaired_shader = !self
+                let waiting_for_repaired_shader = self
                     .render_pipelines_with_broken_shaders
                     .contains(&render_pipeline_handle);
 
@@ -192,7 +192,7 @@ impl PipelineManager {
                 }
 
                 let label = &render_pipeline.descriptor.debug_label;
-                log::info!("Recreating pipeline {label:?}",);
+                log::info!("Recreating pipeline {label:?}");
 
                 match create_wgpu_render_pipeline(
                     &mut self.shader_cache,
@@ -202,17 +202,16 @@ impl PipelineManager {
                     Ok((wgpu_pipeline, shader_handles)) => {
                         render_pipeline.pipeline = wgpu_pipeline;
                         render_pipeline.shader_handles = shader_handles;
+                        self.render_pipelines_with_broken_shaders
+                            .remove(&render_pipeline_handle);
                     }
                     Err(err) => {
                         log::error!("Failed to recreate pipeline {label:?}:\n{err}");
                         self.render_pipelines_with_broken_shaders
                             .insert(render_pipeline_handle);
-                        return; // Don't spam the user with errors for even more shaders.
                     }
                 }
             }
-
-            // TODO: remove dependent modules.
         }
     }
 }

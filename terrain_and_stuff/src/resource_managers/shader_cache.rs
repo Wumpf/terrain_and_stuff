@@ -173,7 +173,7 @@ impl ShaderCache {
             });
         }
 
-        let is_direct_dependency_of = required_imports
+        let parent_shaders = required_imports
             .iter()
             .map(|import| {
                 let import_path = import
@@ -197,6 +197,9 @@ impl ShaderCache {
                         shader_defs,
                     })
             {
+                // Make sure composer no longer knows this module - looks like depending on the error it may still :/
+                self.composer.remove_composable_module(&composer_path);
+
                 // Can't do map_err because otherwise borrow checker gets angry.
                 return Err(ShaderCacheError::NagaOilComposeError {
                     path: composer_path.into(),
@@ -213,7 +216,7 @@ impl ShaderCache {
         self.shader_sources_per_path
             .insert(path.to_path_buf(), handle);
 
-        for parent_shader in is_direct_dependency_of {
+        for parent_shader in parent_shaders {
             self.shader_sources[parent_shader]
                 .direct_dependents
                 .insert(handle);
