@@ -82,14 +82,19 @@ fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_
 
         let sun_transmittance = sample_transmittance_lut(altitude_km, dir_to_sun);
         // TODO: implement multiple scattering LUT.
-        let psi_multiple_scattering = vec3f(0.0);
+        let multiscattered_luminance = vec3f(0.0);
 
         // TODO: earth shadow at night?
         // https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/Resources/RenderSkyRayMarching.hlsl#L181
+        let earth_shadow = 1.0;
+        // TODO: large shadow casters (like mountains or clouds)
+        let shadow = 1.0;
 
-        let rayleigh_inscattering = scattering.rayleigh * (rayleigh_phase * sun_transmittance + psi_multiple_scattering);
-        let mie_inscattering = scattering.mie * (mie_phase * sun_transmittance + psi_multiple_scattering);
-        let inscattering = rayleigh_inscattering + mie_inscattering;
+        // Compute amount of light coming in via scattering.
+        // Note that multi-scattering is unaffected by shadows (approximating it coming from distant sources).
+        let phase_times_scattering = scattering.mie * mie_phase + scattering.rayleigh * rayleigh_phase;
+        let inscattering = earth_shadow * shadow * sun_transmittance * phase_times_scattering +
+                                multiscattered_luminance * (scattering.rayleigh + scattering.mie);
 
         // Integrated scattering within path segment.
         let scattering_integral = (inscattering - inscattering * sample_transmittance) / scattering.total_extinction;
@@ -120,7 +125,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let view_space_position = view_space_position_from_depth_buffer(textureLoad(screen_depth, vec2i(position.xy), 0).r, texcoord);
     let geometry_distance_on_camera_ray = length(view_space_position);
 
-    let dir_to_sun = normalize(vec3f(0.0, 10.0, 30.0)); // TODO:
+    let dir_to_sun = normalize(vec3f(0.0, 100.0, 30.0)); // TODO:
 
     // For our camera we generally assume a flat planet.
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
@@ -151,4 +156,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
 
     //let world_space_position = (view_space_position * frame.view_from_world).xyz + frame.camera_position;
     //return ScatteringResult(vec4f(fract(abs(world_space_position) * 0.0001), 1.0), vec4f(0.0));
+
+    //let trasmittance_lut = textureSample(transmittance_lut, trilinear_sampler_clamp, texcoord);
+    //return ScatteringResult(trasmittance_lut, vec4f(0.0));
 }

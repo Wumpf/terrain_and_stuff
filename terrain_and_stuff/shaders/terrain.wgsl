@@ -37,11 +37,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let index_in_quad = i32(vertex_index % 6);
     let grid_position = quad_positions[index_in_quad];
 
-    let grid_to_world = 2000.0;
+    let grid_to_world = 3000.0;
 
     let plane_position = vec2f(grid_position + quad_coord);
     let to_center = vec2f(grid_size_f * 0.5) - plane_position;
-    let height = 0.5 * grid_size_f * grid_size_f / (dot(to_center, to_center) + grid_size_f) * grid_to_world - 10.0;
+    var height = 0.5 * grid_size_f * grid_size_f / (dot(to_center, to_center) + grid_size_f) * grid_to_world - 10.0;
 
     let world_position_2d = plane_position * grid_to_world;
     let world_position = vec3f(world_position_2d, height).xzy;
@@ -55,5 +55,5 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
-    return vec4f(0.5, 0.5, 0.5, 1.0);
+    return vec4f(0.7, 0.7, 0.7, 1.0);
 }
