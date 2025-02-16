@@ -43,7 +43,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let grid_position = quad_positions[index_in_quad];
 
     let grid_to_world = 6.0;
-    let height_scale_factor = 10000.0;
+    let height_scale_factor = 15000.0;
 
     let plane_position = grid_position + quad_coord;
     let height = textureLoad(heightmap, plane_position, 0).r * height_scale_factor;
@@ -74,7 +74,7 @@ fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
     // TODO: have the decency and use the same as atmosphere
     let light_direction = normalize(vec3f(0.0, 10.0, 30.0));
 
-    let diffuse = max(dot(normal, light_direction), 0.0) * 0.8 + 0.1;
+    let diffuse = max(dot(normal, light_direction), 0.0) * 0.5 + 0.1;
 
     return vec4f(diffuse,diffuse,diffuse, 1.0);
 

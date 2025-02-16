@@ -122,7 +122,8 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let camera_ray = camera_ray_from_screenuv(texcoord);
 
     // Determine the length of the camera ray when we hit geometry - this length is infinity wherever we hit the sky.
-    let view_space_position = view_space_position_from_depth_buffer(textureLoad(screen_depth, vec2i(position.xy), 0).r, texcoord);
+    let depth_buffer_depth = textureLoad(screen_depth, vec2i(position.xy), 0).r;
+    let view_space_position = view_space_position_from_depth_buffer(depth_buffer_depth, texcoord);
     let geometry_distance_on_camera_ray = length(view_space_position);
 
     let dir_to_sun = normalize(vec3f(0.0, 10.0, 30.0)); // TODO:
@@ -141,12 +142,14 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
 
     let result = raymarch_scattering(camera_ray, planet_relative_position_km, dir_to_sun, max_marching_distance_km);
 
-    // WORKAROUND FOR CHROME:
-    // Check this last, so everything above is uniform control flow.
-    // (https://www.w3.org/TR/WGSL/#fwidth-builtin is supposed to return an indeterminate value in this case but accept the shader)
-    if atmosphere_distance_km < 0.0 {
-        // This shader isn't equipped for views outside of the atmosphere.
-        return ScatteringResult(ERROR_RGBA, ERROR_RGBA);
+
+    // DEBUG:
+    // Disable sky wherever there's something in the depth buffer for debugging the effect of the atmosphere on the landscape.
+    if false && depth_buffer_depth != 0.0 {
+        var debug_result = result;;
+        debug_result.transmittance = vec4f(1.0);
+        debug_result.scattering *= vec4f(0.0);
+        return debug_result;
     }
 
     return result;
