@@ -20,7 +20,7 @@ enable dual_source_blending;
 // by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
 #import "constants.wgsl"::{ERROR_RGBA}
-#import "camera.wgsl"::{camera_ray_from_screenuv}
+#import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
 #import "global_bindings.wgsl"::{trilinear_sampler_clamp, frame}
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 
@@ -91,9 +91,6 @@ fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_
         let mie_inscattering = scattering.mie * (mie_phase * sun_transmittance + psi_multiple_scattering);
         let inscattering = rayleigh_inscattering + mie_inscattering;
 
-        // TODO:
-        //let inscattering = vec3f(0.0);
-
         // Integrated scattering within path segment.
         let scattering_integral = (inscattering - inscattering * sample_transmittance) / scattering.total_extinction;
 
@@ -117,17 +114,13 @@ fn raymarch_scattering(camera_ray: Ray, planet_relative_position_km: vec3f, dir_
 
 @fragment
 fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> ScatteringResult {
-    // TODO: linearize.
-    let scene_depth = textureLoad(screen_depth, vec2i(position.xy), 0).r;
-
-    // TODO: overlay.
-    // if scene_depth != 0.0 {
-    //     return ScatteringResult(ERROR_RGBA, ERROR_RGBA);
-    // }
-
     let camera_ray = camera_ray_from_screenuv(texcoord);
 
-    let dir_to_sun = normalize(vec3f(0.0, 2.0, 30.0)); // TODO:
+    // Determine the length of the camera ray when we hit geometry - this length is infinity wherever we hit the sky.
+    let view_space_position = view_space_position_from_depth_buffer(textureLoad(screen_depth, vec2i(position.xy), 0).r, texcoord);
+    let geometry_distance_on_camera_ray = length(view_space_position);
+
+    let dir_to_sun = normalize(vec3f(0.0, 10.0, 30.0)); // TODO:
 
     // For our camera we generally assume a flat planet.
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
@@ -138,7 +131,8 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
     let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_radius_km);
     let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
-    let max_marching_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
+    let atmosphere_or_ground_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
+    let max_marching_distance_km = min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 
     let result = raymarch_scattering(camera_ray, planet_relative_position_km, dir_to_sun, max_marching_distance_km);
 
@@ -151,4 +145,10 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     }
 
     return result;
+
+    // Debug stuff:
+    //return ScatteringResult(vec4f(fract(max_marching_distance_km * 0.1)), vec4f(0.0));
+
+    //let world_space_position = (view_space_position * frame.view_from_world).xyz + frame.camera_position;
+    //return ScatteringResult(vec4f(fract(abs(world_space_position) * 0.0001), 1.0), vec4f(0.0));
 }
