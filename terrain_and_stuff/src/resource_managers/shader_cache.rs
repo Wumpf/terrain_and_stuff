@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
     path::{Path, PathBuf},
 };
 
@@ -15,21 +16,14 @@ struct ShaderSourceEntry {
     source: String,
 
     /// All shaders that depend on this shader source directly.
-    direct_dependents: Vec<ShaderHandle>,
-}
-
-pub struct ShaderModuleEntry {
-    pub module: wgpu::ShaderModule,
-
-    /// List of all shader paths that went into building this module.
-    pub dependent_shaders: HashSet<PathBuf>,
+    direct_dependents: HashSet<ShaderHandle>,
 }
 
 pub struct ShaderCache {
     composer: naga_oil::compose::Composer,
 
     shader_sources: SlotMap<ShaderHandle, ShaderSourceEntry>,
-    shader_modules: SecondaryMap<ShaderHandle, ShaderModuleEntry>,
+    shader_modules: SecondaryMap<ShaderHandle, wgpu::ShaderModule>,
 
     // Once preprocessor setting is supported, a single path buf would map to several shaders?
     shader_sources_per_path: HashMap<PathBuf, ShaderHandle>,
@@ -73,26 +67,40 @@ impl ShaderCache {
     ///
     /// This recursively removes all shaders depending on this path as well.
     /// Path must be relative to [`SHADERS_DIR`].
+    /// Returns a list of all shaders that were removed.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    pub fn remove_shader_for_path(&mut self, path: &Path) {
-        let Some(handle) = self.shader_sources_per_path.remove(path) else {
-            return;
+    pub fn remove_shader_for_path(&mut self, path: &Path) -> Vec<ShaderHandle> {
+        let Ok(path) = resolve_path(path) else {
+            log::error!("Failed to resolve shader path {path:?}");
+            return vec![];
+        };
+        let Some(handle) = self.shader_sources_per_path.remove(&path) else {
+            log::debug!("Shader for path {path:?} not found");
+            return vec![];
         };
 
+        let mut removed_shaders = vec![handle];
+
         if let Some(shader_source) = self.shader_sources.remove(handle) {
-            for dependency in shader_source.direct_dependents {
-                if let Some(dependent_shader_source) = self.shader_sources.get(dependency) {
-                    self.remove_shader_for_path(&dependent_shader_source.file_path.clone());
+            for child in shader_source.direct_dependents {
+                if let Some(child_shader) = self.shader_sources.get(child) {
+                    removed_shaders
+                        .extend(self.remove_shader_for_path(&child_shader.file_path.clone()));
                 }
             }
         }
 
-        self.composer
-            .remove_composable_module(path.to_str().expect("Shader path is not valid UTF-8"));
+        let composer_path = composer_path(&path);
+        self.composer.remove_composable_module(&composer_path);
+
         self.shader_modules.remove(handle);
+
+        log::debug!("Removed shader for path {path:?}");
+
+        removed_shaders
     }
 
-    pub fn shader_module(&self, handle: ShaderHandle) -> Option<&ShaderModuleEntry> {
+    pub fn shader_module(&self, handle: ShaderHandle) -> Option<&wgpu::ShaderModule> {
         self.shader_modules.get(handle)
     }
 
@@ -105,13 +113,17 @@ impl ShaderCache {
         device: &wgpu::Device,
         path: &Path,
     ) -> Result<ShaderHandle, ShaderCacheError> {
-        let handle = if let Some(handle) = self.shader_sources_per_path.get(path) {
+        let path = resolve_path(path)?;
+        let handle = if let Some(handle) = self.shader_sources_per_path.get(&path) {
+            log::debug!("Shader for path {path:?} already loaded");
             *handle
         } else {
-            self.get_or_load_shader_source(path)?
+            log::debug!("Loading shader for path {path:?}");
+            self.get_or_load_shader_source(&path)?
         };
 
         if self.shader_modules.contains_key(handle) {
+            log::debug!("shader module for path {path:?} already loaded");
             return Ok(handle);
         }
 
@@ -136,44 +148,22 @@ impl ShaderCache {
             source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module.to_owned())),
         });
 
-        // Gather all dependent shaders.
-        fn collect_dependent_shaders(
-            source: &ShaderSourceEntry,
-            shader_sources: &SlotMap<ShaderHandle, ShaderSourceEntry>,
-            dependent_shaders: &mut HashSet<PathBuf>,
-        ) {
-            if dependent_shaders.insert(source.file_path.clone()) {
-                for dependent_shader in &source.direct_dependents {
-                    collect_dependent_shaders(
-                        &shader_sources[*dependent_shader],
-                        shader_sources,
-                        dependent_shaders,
-                    );
-                }
-            }
-        }
-        let mut dependent_shaders = HashSet::new();
-        collect_dependent_shaders(source, &self.shader_sources, &mut dependent_shaders);
-
-        self.shader_modules.insert(
-            handle,
-            ShaderModuleEntry {
-                module,
-                dependent_shaders,
-            },
-        );
+        self.shader_modules.insert(handle, module);
 
         Ok(handle)
     }
 
     /// Loads shader source into the composer and returns a handle if it wasn't already loaded.
+    ///
+    /// Path must be relative to [`SHADERS_DIR`].
     fn get_or_load_shader_source(&mut self, path: &Path) -> Result<ShaderHandle, ShaderCacheError> {
-        if let Some(handle) = self.shader_sources_per_path.get(path) {
+        let path = resolve_path(path)?;
+        if let Some(handle) = self.shader_sources_per_path.get(&path) {
             assert!(self.shader_sources.contains_key(*handle));
             return Ok(*handle);
         }
 
-        let source = raw_shader_source(path)?;
+        let source = raw_shader_source(&path)?;
 
         let (module_name, required_imports, shader_defs) =
             naga_oil::compose::get_preprocessor_data(&source);
@@ -195,21 +185,21 @@ impl ShaderCache {
             .collect::<Result<Vec<_>, _>>()?;
 
         {
-            let path_string = path.to_str().expect("Shader path is not valid UTF-8");
+            let composer_path = composer_path(&path);
             if let Err(err) =
                 self.composer
                     .add_composable_module(naga_oil::compose::ComposableModuleDescriptor {
                         source: &source,
-                        file_path: path_string,
+                        file_path: &composer_path,
                         language: naga_oil::compose::ShaderLanguage::Wgsl,
-                        as_name: Some(format!("{path_string:?}")),
+                        as_name: Some(format!("{composer_path:?}")),
                         additional_imports: &[],
                         shader_defs,
                     })
             {
                 // Can't do map_err because otherwise borrow checker gets angry.
                 return Err(ShaderCacheError::NagaOilComposeError {
-                    path: path.to_path_buf(),
+                    path: composer_path.into(),
                     err_formatted: err.emit_to_string(&self.composer),
                 });
             }
@@ -218,19 +208,25 @@ impl ShaderCache {
         let handle = self.shader_sources.insert(ShaderSourceEntry {
             file_path: path.to_path_buf(),
             source,
-            direct_dependents: is_direct_dependency_of,
+            direct_dependents: HashSet::new(),
         });
         self.shader_sources_per_path
             .insert(path.to_path_buf(), handle);
+
+        for parent_shader in is_direct_dependency_of {
+            self.shader_sources[parent_shader]
+                .direct_dependents
+                .insert(handle);
+        }
 
         Ok(handle)
     }
 }
 
-fn raw_shader_source(path: &std::path::Path) -> Result<String, ShaderCacheError> {
+fn raw_shader_source(full_path: &std::path::Path) -> Result<String, ShaderCacheError> {
     #[cfg(target_arch = "wasm32")]
     {
-        let path_str = path.to_str().unwrap();
+        let path_str = full_path.to_str().expect("Shader path is not valid UTF-8");
         Ok(crate::shaders_embedded::SHADER_FILES
             .iter()
             .find_map(|(name, source)| {
@@ -241,16 +237,51 @@ fn raw_shader_source(path: &std::path::Path) -> Result<String, ShaderCacheError>
                 }
             })
             .ok_or(ShaderCacheError::EmbeddedShaderNotFound {
-                path: path.to_path_buf(),
+                path: full_path.to_path_buf(),
             })?
             .to_owned())
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let path = std::path::Path::new(SHADERS_DIR).join(path);
-        std::fs::read_to_string(&path).map_err(|err| ShaderCacheError::FailedToLoadShaderSource {
-            path: path.to_path_buf(),
-            err,
+        std::fs::read_to_string(&full_path).map_err(|err| {
+            ShaderCacheError::FailedToLoadShaderSource {
+                path: full_path.to_path_buf(),
+                err,
+            }
         })
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn resolve_path(path: &Path) -> Result<PathBuf, ShaderCacheError> {
+    Ok(path.to_path_buf())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn resolve_path(path: &Path) -> Result<PathBuf, ShaderCacheError> {
+    std::path::Path::new(SHADERS_DIR)
+        .join(path)
+        .canonicalize()
+        .map_err(|err| ShaderCacheError::FailedToLoadShaderSource {
+            path: path.into(),
+            err,
+        })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn composer_path(path: &Path) -> String {
+    path.to_str()
+        .expect("Shader path is not valid UTF-8")
+        .to_owned()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn composer_path(path: &Path) -> String {
+    let base_path = std::path::Path::new(SHADERS_DIR).canonicalize().unwrap();
+    let relative_path = path.strip_prefix(&base_path).unwrap();
+    relative_path
+        .to_str()
+        .expect("Shader path is not valid UTF-8")
+        .replace("\\", "/")
+        .to_owned()
 }

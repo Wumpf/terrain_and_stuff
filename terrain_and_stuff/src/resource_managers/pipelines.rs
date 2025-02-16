@@ -2,7 +2,7 @@ use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
 use itertools::{self as _};
 
-use super::shader_cache::{ShaderCache, ShaderCacheError};
+use super::shader_cache::{ShaderCache, ShaderCacheError, ShaderHandle};
 
 slotmap::new_key_type! { pub struct RenderPipelineHandle; }
 
@@ -47,9 +47,7 @@ pub struct RenderPipelineDescriptor {
 struct RenderPipelineEntry {
     pipeline: wgpu::RenderPipeline,
     descriptor: RenderPipelineDescriptor,
-
-    /// List of all shader paths that went into building this render pipeline.
-    dependent_shader_paths: HashSet<PathBuf>,
+    shader_handles: HashSet<ShaderHandle>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -134,12 +132,12 @@ impl PipelineManager {
         device: &wgpu::Device,
         descriptor: RenderPipelineDescriptor,
     ) -> Result<RenderPipelineHandle, PipelineError> {
-        let (pipeline, dependent_shader_paths) =
+        let (pipeline, shader_handles) =
             create_wgpu_render_pipeline(&mut self.shader_cache, &descriptor, device)?;
         let handle = self.render_pipelines.insert(RenderPipelineEntry {
             pipeline,
             descriptor,
-            dependent_shader_paths,
+            shader_handles,
         });
 
         Ok(handle)
@@ -170,17 +168,19 @@ impl PipelineManager {
             let Ok(path) = path.canonicalize() else {
                 continue;
             };
-            let Ok(path) = path.strip_prefix(&shader_base_path) else {
+            let Ok(relative_path) = path.strip_prefix(&shader_base_path) else {
                 continue;
             };
 
-            log::info!("Reloading shader {:?}", path);
-
-            self.shader_cache.remove_shader_for_path(path);
+            log::info!("Reloading shader {:?}", relative_path);
+            let removed_shaders = self.shader_cache.remove_shader_for_path(relative_path);
 
             // Try to recreate all pipelines that use this shader.
             for render_pipeline in self.render_pipelines.values_mut() {
-                if !render_pipeline.dependent_shader_paths.contains(path) {
+                if !removed_shaders
+                    .iter()
+                    .any(|removed_shader| render_pipeline.shader_handles.contains(&removed_shader))
+                {
                     continue;
                 }
 
@@ -192,9 +192,9 @@ impl PipelineManager {
                     &render_pipeline.descriptor,
                     device,
                 ) {
-                    Ok((wgpu_pipeline, dependent_shader_paths)) => {
+                    Ok((wgpu_pipeline, shader_handles)) => {
                         render_pipeline.pipeline = wgpu_pipeline;
-                        render_pipeline.dependent_shader_paths = dependent_shader_paths;
+                        render_pipeline.shader_handles = shader_handles;
                     }
                     Err(err) => {
                         // This actually shouldn't happen since errors on pipeline creation itself are usually delayed.
@@ -213,7 +213,7 @@ fn create_wgpu_render_pipeline(
     shader_cache: &mut ShaderCache,
     descriptor: &RenderPipelineDescriptor,
     device: &wgpu::Device,
-) -> Result<(wgpu::RenderPipeline, HashSet<PathBuf>), PipelineError> {
+) -> Result<(wgpu::RenderPipeline, HashSet<ShaderHandle>), PipelineError> {
     let vertex_shader_handle =
         shader_cache.get_or_load_shader_module(device, &descriptor.vertex_shader.path)?;
     let fragment_shader_handle =
@@ -226,10 +226,6 @@ fn create_wgpu_render_pipeline(
         .shader_module(fragment_shader_handle)
         .expect("Invalid shader handle");
 
-    let mut dependent_shader_paths = HashSet::default();
-    dependent_shader_paths.extend(vertex_shader_module.dependent_shaders.iter().cloned());
-    dependent_shader_paths.extend(fragment_shader_module.dependent_shaders.iter().cloned());
-
     let targets = descriptor
         .fragment_targets
         .iter()
@@ -239,13 +235,13 @@ fn create_wgpu_render_pipeline(
         label: Some(&descriptor.debug_label),
         layout: Some(&descriptor.layout),
         vertex: wgpu::VertexState {
-            module: &vertex_shader_module.module,
+            module: &vertex_shader_module,
             entry_point: descriptor.vertex_shader.function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
-            module: &fragment_shader_module.module,
+            module: &fragment_shader_module,
             entry_point: descriptor.fragment_shader.function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             targets: &targets,
@@ -257,7 +253,12 @@ fn create_wgpu_render_pipeline(
         cache: None,
     };
     let pipeline = device.create_render_pipeline(&wgpu_desc);
-    Ok((pipeline, dependent_shader_paths))
+
+    let shader_handles = [vertex_shader_handle, fragment_shader_handle]
+        .into_iter()
+        .collect();
+
+    Ok((pipeline, shader_handles))
 }
 
 fn pipeline_compilation_options() -> wgpu::PipelineCompilationOptions<'static> {
