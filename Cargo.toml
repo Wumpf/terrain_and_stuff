@@ -1,7 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["terrain_and_stuff", "xtask"]
 default-members = ["terrain_and_stuff"]
+members = ["terrain_and_stuff", "xtask"]
+
+[workspace.package]
+edition = "2024"
 
 [patch.crates-io]
 # Because someone gotta test the cutting edge!
