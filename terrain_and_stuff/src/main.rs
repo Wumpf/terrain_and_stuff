@@ -56,7 +56,7 @@ struct Application<'a> {
     error_tracker: Arc<ErrorTracker>,
 }
 
-impl<'a> Application<'a> {
+impl Application<'_> {
     /// Initializes the application.
     ///
     /// There's various ways for this to fail, all of which are handled via `expect` right now.

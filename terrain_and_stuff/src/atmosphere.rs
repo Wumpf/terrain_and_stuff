@@ -148,9 +148,9 @@ impl Atmosphere {
         transmittance_lut: &wgpu::TextureView,
         primary_depth_buffer: &PrimaryDepthBuffer,
     ) -> wgpu::BindGroup {
-        BindGroupBuilder::new(&raymarch_bindings)
-            .texture(&transmittance_lut)
-            .texture(&primary_depth_buffer.view())
+        BindGroupBuilder::new(raymarch_bindings)
+            .texture(transmittance_lut)
+            .texture(primary_depth_buffer.view())
             .create(device, "atmosphere/raymarch_sky")
     }
 

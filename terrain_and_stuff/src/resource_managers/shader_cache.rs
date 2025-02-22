@@ -246,7 +246,7 @@ fn raw_shader_source(full_path: &std::path::Path) -> Result<String, ShaderCacheE
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::fs::read_to_string(&full_path).map_err(|err| {
+        std::fs::read_to_string(full_path).map_err(|err| {
             ShaderCacheError::FailedToLoadShaderSource {
                 path: full_path.to_path_buf(),
                 err,

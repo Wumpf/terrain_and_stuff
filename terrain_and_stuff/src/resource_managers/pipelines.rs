@@ -181,7 +181,7 @@ impl PipelineManager {
             for (render_pipeline_handle, render_pipeline) in self.render_pipelines.iter_mut() {
                 let affected_by_removed_shaders = removed_shaders
                     .iter()
-                    .any(|removed_shader| render_pipeline.shader_handles.contains(&removed_shader));
+                    .any(|removed_shader| render_pipeline.shader_handles.contains(removed_shader));
                 // Any pipeline that previously failed to reload no longer points to valid shaders which is why we have to check them separately.
                 let waiting_for_repaired_shader = self
                     .render_pipelines_with_broken_shaders
@@ -242,13 +242,13 @@ fn create_wgpu_render_pipeline(
         label: Some(&descriptor.debug_label),
         layout: Some(&descriptor.layout),
         vertex: wgpu::VertexState {
-            module: &vertex_shader_module,
+            module: vertex_shader_module,
             entry_point: descriptor.vertex_shader.function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
-            module: &fragment_shader_module,
+            module: fragment_shader_module,
             entry_point: descriptor.fragment_shader.function_name.as_deref(),
             compilation_options: pipeline_compilation_options(),
             targets: &targets,
