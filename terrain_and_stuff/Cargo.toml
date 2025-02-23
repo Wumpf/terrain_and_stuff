@@ -20,6 +20,7 @@ wgpu = { version = "24", default-features = false, features = [
 
 anyhow = "1.0.90"
 bytemuck = { version = "1.12.3", features = ["derive"] }
+ddsfile = "0.5.2"
 glam = "0.29.0"
 itertools = "0.14.0"
 log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.

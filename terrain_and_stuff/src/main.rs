@@ -19,7 +19,7 @@ mod wgpu_utils;
 
 use anyhow::Context;
 use minifb::{Window, WindowOptions};
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::{Arc, atomic::AtomicU64};
 use web_time::Instant;
 
 use atmosphere::Atmosphere;
@@ -130,6 +130,8 @@ impl Application<'_> {
         let global_bindings = GlobalBindings::new(&device);
         let hdr_backbuffer = HdrBackbuffer::new(
             &device,
+            &queue,
+            &global_bindings,
             resolution,
             &mut pipeline_manager,
             screen.surface_format(),
@@ -249,7 +251,12 @@ impl Application<'_> {
 
         self.draw_scene(&mut encoder);
         self.hdr_backbuffer
-            .display_transform(&view, &mut encoder, &self.pipeline_manager)
+            .display_transform(
+                &view,
+                &mut encoder,
+                &self.pipeline_manager,
+                &self.global_bindings,
+            )
             .ok_or_log("display transform");
 
         let command_buffer = encoder.finish();

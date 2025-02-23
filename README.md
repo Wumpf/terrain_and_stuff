@@ -20,3 +20,16 @@ Various implementations exists:
 * [Lukas Herzbeger's rigorous WebGPU implementation](https://github.com/JolifantoBambla/webgpu-sky-atmosphere) with many different configuration options and compute shader variants
 
 TODO: haven't implemented the whole thing yet (multiple scattering is missing for instance), also there seems to be some issues.
+
+
+Display transform
+-----------------
+
+All calculations are done in Bt.709 linear luminance values (i.e. using photometric units if not specified otherwise).
+
+As explained in https://seblagarde.wordpress.com/wp-content/uploads/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf
+it has some advantages to keep all units radiometric for non-spectral rendering and a fixed conversion factor can be assumed.
+
+The HDR Bt.709 stimulus is then mapped to LDR using [Tony McMapface](https://github.com/h3r2tic/tony-mc-mapface)
+and converted to sRGB "gamma" space by applying the sRGB OETF.
+TODO: Would be interesting to explore supporting Display P3 output as well!
