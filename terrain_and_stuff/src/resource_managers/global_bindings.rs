@@ -1,5 +1,5 @@
 use crate::wgpu_utils::{
-    wgpu_buffer_types, BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc,
+    BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc, wgpu_buffer_types,
 };
 
 #[repr(C, align(16))]

@@ -15,15 +15,16 @@ wgpu = { version = "24", default-features = false, features = [
     "wgsl",
     # No time for Send/Sync headaches on the web.
     "fragile-send-sync-non-atomic-wasm",
-
 ] }
 
 anyhow = "1.0.90"
 bytemuck = { version = "1.12.3", features = ["derive"] }
 ddsfile = "0.5.2"
+egui = "0.31.0"
+egui-wgpu = { version = "0.31.0", no-default-features = true }
 glam = "0.29.0"
 itertools = "0.14.0"
-log = "0.4.22"                                              # Logging, mostly since println can't be used on the web.
+log = "0.4.22"                                                 # Logging, mostly since println can't be used on the web.
 minifb = "0.28.0"
 naga_oil = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.3"

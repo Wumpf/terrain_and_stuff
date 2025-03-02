@@ -74,7 +74,7 @@ fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
     // TODO: have the decency and use the same as atmosphere
     let light_direction = normalize(vec3f(0.0, 10.0, 30.0));
 
-    let diffuse = max(dot(normal, light_direction), 0.0) * 0.5 + 0.1;
+    let diffuse = max(dot(normal, light_direction), 0.0) * 0.8 + 0.2;
 
     return vec4f(diffuse,diffuse,diffuse, 1.0);
 

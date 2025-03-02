@@ -7,6 +7,17 @@ A graphics demo where I play around with - you guessed - it terrain and stuff!
 
 TODO: more readme :)
 
+
+Tech Stack
+-----------------
+
+* [wgpu](https://github.com/gfx-rs/wgpu) for rendering
+* [naga_oil](https://github.com/bevyengine/naga_oil) for shader (pre-)processing
+* [minifb](https://github.com/emoon/minifb) for windowing and event handling
+* [egui](https://github.com/emilk/egui) for UI
+  * using a custom, minimalistic binding to minifb instead of [eframe](https://github.com/emilk/egui/tree/master/crates/eframe)
+
+
 Sky rendering
 -----------------
 
@@ -33,3 +44,4 @@ it has some advantages to keep all units radiometric for non-spectral rendering 
 The HDR Bt.709 stimulus is then mapped to LDR using [Tony McMapface](https://github.com/h3r2tic/tony-mc-mapface)
 and converted to sRGB "gamma" space by applying the sRGB OETF.
 TODO: Would be interesting to explore supporting Display P3 output as well!
+

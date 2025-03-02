@@ -1,5 +1,5 @@
 use std::{cell::RefCell, panic, rc::Rc};
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::{JsCast, prelude::*};
 use wgpu::web_sys;
 
 use crate::Application;

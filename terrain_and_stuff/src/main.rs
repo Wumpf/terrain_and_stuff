@@ -7,6 +7,7 @@ mod shaders_embedded;
 
 mod atmosphere;
 mod camera;
+mod egui_minifb;
 mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
@@ -18,6 +19,7 @@ mod wgpu_utils;
 // -----------------------------------------
 
 use anyhow::Context;
+use egui_minifb::EguiMinifb;
 use minifb::{Window, WindowOptions};
 use std::sync::{Arc, atomic::AtomicU64};
 use web_time::Instant;
@@ -39,6 +41,8 @@ struct Application<'a> {
     global_bindings: GlobalBindings,
     hdr_backbuffer: HdrBackbuffer,
     primary_depth_buffer: PrimaryDepthBuffer,
+
+    gui: EguiMinifb,
 
     atmosphere: Atmosphere,
     terrain: TerrainRenderer,
@@ -138,6 +142,8 @@ impl Application<'_> {
         )
         .context("Create HDR backbuffer & display transform pipeline")?;
 
+        let gui = EguiMinifb::new(&device, &screen);
+
         let atmosphere = Atmosphere::new(
             &device,
             &global_bindings,
@@ -174,8 +180,11 @@ impl Application<'_> {
             global_bindings,
             hdr_backbuffer,
             primary_depth_buffer,
+
+            gui,
             atmosphere,
             terrain,
+
             window,
 
             adapter,
@@ -216,6 +225,7 @@ impl Application<'_> {
         }
 
         self.camera.update(delta_time, &self.window);
+        self.gui.update(&self.window, run_gui);
     }
 
     pub fn draw(&mut self) {
@@ -250,14 +260,34 @@ impl Application<'_> {
             });
 
         self.draw_scene(&mut encoder);
-        self.hdr_backbuffer
-            .display_transform(
-                &view,
-                &mut encoder,
-                &self.pipeline_manager,
-                &self.global_bindings,
-            )
-            .ok_or_log("display transform");
+        {
+            let mut render_pass = encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Display transform & GUI"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None, // TODO: wgpu_profiler!
+                    occlusion_query_set: None,
+                })
+                .forget_lifetime();
+
+            self.hdr_backbuffer
+                .display_transform(
+                    &mut render_pass,
+                    &self.pipeline_manager,
+                    &self.global_bindings,
+                )
+                .ok_or_log("display transform");
+            self.gui
+                .draw(&self.device, &self.queue, &mut encoder, &mut render_pass);
+        }
 
         let command_buffer = encoder.finish();
         self.queue.submit(Some(command_buffer));
@@ -342,6 +372,12 @@ impl Application<'_> {
                 .ok_or_log("draw sky");
         }
     }
+}
+
+fn run_gui(egui_ctx: &egui::Context) {
+    egui::Window::new("Controls").show(egui_ctx, |ui| {
+        ui.label("Hello egui!");
+    });
 }
 
 fn main() {

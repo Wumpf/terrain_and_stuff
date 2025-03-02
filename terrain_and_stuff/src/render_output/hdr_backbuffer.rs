@@ -134,28 +134,10 @@ impl HdrBackbuffer {
 
     pub fn display_transform(
         &self,
-        target: &wgpu::TextureView,
-        encoder: &mut wgpu::CommandEncoder,
+        render_pass: &mut wgpu::RenderPass<'_>,
         pipeline_manager: &PipelineManager,
         global_bindings: &GlobalBindings,
     ) -> Result<(), PipelineError> {
-        // TODO: All this tonemapping does is go from half (linear) to srgb. Do some nice tonemapping here!
-        // Note that we can't use a compute shader here since that would require STORAGE usage flag on the final output which we can't do since it's srgb!
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Display transform"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None, // TODO: wgpu_profiler!
-            occlusion_query_set: None,
-        });
-
         render_pass
             .set_pipeline(pipeline_manager.get_render_pipeline(self.display_transform_pipeline)?);
         render_pass.set_bind_group(0, Some(&global_bindings.bind_group), &[]);
