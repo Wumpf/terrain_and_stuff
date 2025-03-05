@@ -18,6 +18,10 @@ mod wgpu_utils;
 
 // -----------------------------------------
 
+pub type EncoderScope<'a> = wgpu_profiler::Scope<'a, wgpu::CommandEncoder>;
+
+// -----------------------------------------
+
 use anyhow::Context;
 use egui_minifb::EguiMinifb;
 use minifb::{Window, WindowOptions};
@@ -42,6 +46,8 @@ struct Application<'a> {
     hdr_backbuffer: HdrBackbuffer,
     primary_depth_buffer: PrimaryDepthBuffer,
 
+    gpu_profiler: Option<wgpu_profiler::GpuProfiler>,
+
     gui: EguiMinifb,
 
     atmosphere: Atmosphere,
@@ -49,7 +55,7 @@ struct Application<'a> {
 
     window: Window,
     adapter: wgpu::Adapter,
-    device: Arc<wgpu::Device>,
+    device: wgpu::Device,
     queue: wgpu::Queue,
     camera: Camera,
     last_update: Instant,
@@ -58,7 +64,11 @@ struct Application<'a> {
     frame_index_for_uncaptured_errors: Arc<AtomicU64>,
     pipeline_manager: PipelineManager,
     error_tracker: Arc<ErrorTracker>,
+
+    last_gpu_profiler_results: Vec<Vec<wgpu_profiler::GpuTimerQueryResult>>,
 }
+
+const NUM_PROFILER_RESULTS_TO_KEEP: usize = 10;
 
 impl Application<'_> {
     /// Initializes the application.
@@ -108,14 +118,17 @@ impl Application<'_> {
             .context("Failed to find an appropriate adapter")?;
         log::info!("Created wgpu adapter: {:?}", adapter.get_info());
 
+        let required_features = wgpu::Features::from(wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING)
+            | wgpu_profiler::GpuProfiler::ALL_WGPU_TIMER_FEATURES.intersection(adapter.features());
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
-                    required_features: wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING.into(),
+                    required_features,
                     // Useful for debugging.
                     //#[cfg(not(target_arch = "wasm32"))]
-                    //required_features: wgpu::FeaturesWebGPU::POLYGON_MODE_LINE,
+                    //required_features: required_features | wgpu::FeaturesWebGPU::POLYGON_MODE_LINE,
                     ..Default::default()
                 },
                 None,
@@ -175,11 +188,23 @@ impl Application<'_> {
             })
         });
 
+        let gpu_profiler = wgpu_profiler::GpuProfiler::new(
+            &device,
+            wgpu_profiler::GpuProfilerSettings {
+                enable_timer_queries: true,
+                enable_debug_groups: true,
+                max_num_pending_frames: 2,
+            },
+        )
+        .unwrap();
+
         Ok(Application {
             screen,
             global_bindings,
             hdr_backbuffer,
             primary_depth_buffer,
+
+            gpu_profiler: Some(gpu_profiler),
 
             gui,
             atmosphere,
@@ -188,7 +213,7 @@ impl Application<'_> {
             window,
 
             adapter,
-            device: Arc::new(device),
+            device,
             queue,
             camera: Camera::new(),
             last_update: Instant::now(),
@@ -197,6 +222,8 @@ impl Application<'_> {
             frame_index_for_uncaptured_errors,
             pipeline_manager,
             error_tracker,
+
+            last_gpu_profiler_results: Vec::new(),
         })
     }
 
@@ -225,7 +252,22 @@ impl Application<'_> {
         }
 
         self.camera.update(delta_time, &self.window);
-        self.gui.update(&self.window, run_gui);
+
+        while let Some(new_profiler_results) = self
+            .gpu_profiler
+            .as_mut()
+            .unwrap()
+            .process_finished_frame(self.queue.get_timestamp_period())
+        {
+            if self.last_gpu_profiler_results.len() + 1 >= NUM_PROFILER_RESULTS_TO_KEEP {
+                self.last_gpu_profiler_results.remove(0);
+            }
+            self.last_gpu_profiler_results.push(new_profiler_results);
+        }
+
+        self.gui.update(&self.window, |egui_ctx| {
+            run_gui(egui_ctx, &self.last_gpu_profiler_results);
+        });
     }
 
     pub fn draw(&mut self) {
@@ -253,44 +295,63 @@ impl Application<'_> {
             },
         );
 
+        let mut gpu_profiler = self.gpu_profiler.take().unwrap();
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Main encoder"),
             });
 
-        self.draw_scene(&mut encoder);
         {
-            let mut render_pass = encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Display transform & GUI"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None, // TODO: wgpu_profiler!
-                    occlusion_query_set: None,
-                })
-                .forget_lifetime();
+            let mut encoder = gpu_profiler.scope("root", &mut encoder);
 
-            self.hdr_backbuffer
-                .display_transform(
-                    &mut render_pass,
-                    &self.pipeline_manager,
-                    &self.global_bindings,
-                )
-                .ok_or_log("display transform");
-            self.gui
-                .draw(&self.device, &self.queue, &mut encoder, &mut render_pass);
+            self.draw_scene(&mut encoder);
+            {
+                let pass_query = gpu_profiler
+                    .begin_pass_query("Display transform & GUI", &mut encoder)
+                    .with_parent(encoder.scope.as_ref());
+                let timestamp_writes = pass_query.render_pass_timestamp_writes();
+
+                let mut render_pass = wgpu_profiler::OwningScope {
+                    profiler: &gpu_profiler,
+                    recorder: encoder
+                        .begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("Display transform & GUI"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
+                            timestamp_writes,
+                            occlusion_query_set: None,
+                        })
+                        .forget_lifetime(),
+                    scope: Some(pass_query),
+                };
+
+                self.hdr_backbuffer
+                    .display_transform(
+                        &mut render_pass,
+                        &self.pipeline_manager,
+                        &self.global_bindings,
+                    )
+                    .ok_or_log("display transform");
+                self.gui
+                    .draw(&self.device, &self.queue, &mut encoder, &mut render_pass);
+            }
         }
+
+        gpu_profiler.resolve_queries(&mut encoder);
 
         let command_buffer = encoder.finish();
         self.queue.submit(Some(command_buffer));
+
+        gpu_profiler.end_frame().unwrap();
+
         frame.present();
 
         {
@@ -311,36 +372,41 @@ impl Application<'_> {
                 },
             );
         }
+
+        self.gpu_profiler = Some(gpu_profiler);
     }
 
-    fn draw_scene(&mut self, encoder: &mut wgpu::CommandEncoder) {
+    fn draw_scene(&self, encoder: &mut EncoderScope<'_>) {
         self.atmosphere
             .prepare(encoder, &self.pipeline_manager)
             .ok_or_log("prepare sky");
 
         {
-            let mut hdr_rpass_with_depth = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Primary HDR render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: self.hdr_backbuffer.texture_view(),
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.primary_depth_buffer.view(),
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
-                        // Need to store depth for sky raymarching.
-                        store: wgpu::StoreOp::Store,
+            let mut hdr_rpass_with_depth = encoder.scoped_render_pass(
+                "Primary HDR render pass",
+                wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: self.hdr_backbuffer.texture_view(),
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: self.primary_depth_buffer.view(),
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
+                            // Need to store depth for sky raymarching.
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                },
+            );
 
             hdr_rpass_with_depth.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
@@ -349,9 +415,10 @@ impl Application<'_> {
                 .ok_or_log("draw sky");
         }
         {
-            let mut hdr_rpass_without_depth =
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Atmosphere HDR render pass"),
+            let mut hdr_rpass_without_depth = encoder.scoped_render_pass(
+                "Atmosphere HDR render pass",
+                wgpu::RenderPassDescriptor {
+                    label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: self.hdr_backbuffer.texture_view(),
                         resolve_target: None,
@@ -363,7 +430,8 @@ impl Application<'_> {
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
-                });
+                },
+            );
 
             hdr_rpass_without_depth.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
@@ -374,10 +442,50 @@ impl Application<'_> {
     }
 }
 
-fn run_gui(egui_ctx: &egui::Context) {
+fn run_gui(
+    egui_ctx: &egui::Context,
+    last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
+) {
     egui::Window::new("Controls").show(egui_ctx, |ui| {
-        ui.label("Hello egui!");
+        egui::CollapsingHeader::new("GPU Profiling")
+            .open(Some(true))
+            .show(ui, |ui| {
+                let Some(last_result) = last_gpu_profiler_results.last() else {
+                    ui.label("No profiling results available");
+                    return;
+                };
+
+                // TODO: Make use of more results.
+                list_gpu_profiling_results_recursive(ui, &last_result);
+            });
     });
+}
+
+fn list_gpu_profiling_results_recursive(
+    ui: &mut egui::Ui,
+    last_gpu_profiler_results: &[wgpu_profiler::GpuTimerQueryResult],
+) {
+    for query in last_gpu_profiler_results {
+        let label = if let Some(time) = &query.time {
+            format!(
+                "{:02.4} ms - {}",
+                (time.end - time.start) * 1000.0,
+                query.label
+            )
+        } else {
+            format!("{}", query.label)
+        };
+
+        if query.nested_queries.is_empty() {
+            ui.label(label);
+        } else {
+            egui::CollapsingHeader::new(label)
+                .open(Some(true))
+                .show(ui, |ui| {
+                    list_gpu_profiling_results_recursive(ui, &query.nested_queries);
+                });
+        }
+    }
 }
 
 fn main() {

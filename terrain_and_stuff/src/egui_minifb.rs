@@ -1,4 +1,4 @@
-use crate::render_output::Screen;
+use crate::{EncoderScope, render_output::Screen};
 
 pub struct EguiMinifb {
     egui_ctx: egui::Context,
@@ -47,8 +47,8 @@ impl EguiMinifb {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        render_pass: &mut wgpu::RenderPass<'static>,
+        encoder: &mut EncoderScope<'_>,
+        render_pass: &mut wgpu_profiler::OwningScope<'_, wgpu::RenderPass<'static>>,
     ) {
         let egui::FullOutput {
             platform_output: _,

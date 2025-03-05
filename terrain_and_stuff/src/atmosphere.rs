@@ -1,4 +1,5 @@
 use crate::{
+    EncoderScope,
     primary_depth_buffer::PrimaryDepthBuffer,
     render_output::HdrBackbuffer,
     resource_managers::{
@@ -165,23 +166,26 @@ impl Atmosphere {
 
     pub fn prepare(
         &self,
-        encoder: &mut wgpu::CommandEncoder,
+        encoder: &mut EncoderScope<'_>,
         pipeline_manager: &PipelineManager,
     ) -> Result<(), PipelineError> {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("atmosphere/transmittance_lut"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.transmittance_lut,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        let mut render_pass = encoder.scoped_render_pass(
+            "atmosphere/transmittance_lut",
+            wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.transmittance_lut,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            },
+        );
 
         render_pass.set_pipeline(
             pipeline_manager.get_render_pipeline(self.render_pipe_transmittance_lut)?,

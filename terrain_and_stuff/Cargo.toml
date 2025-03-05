@@ -21,10 +21,10 @@ anyhow = "1.0.90"
 bytemuck = { version = "1.12.3", features = ["derive"] }
 ddsfile = "0.5.2"
 egui = "0.31.0"
-egui-wgpu = { version = "0.31.0", no-default-features = true }
+egui-wgpu = { version = "0.31.0", default-features = false }
 glam = "0.29.0"
 itertools = "0.14.0"
-log = "0.4.22"                                                 # Logging, mostly since println can't be used on the web.
+log = "0.4.22"                                               # Logging, mostly since println can't be used on the web.
 minifb = "0.28.0"
 naga_oil = { version = "0.17.0", default-features = false }
 parking_lot = "0.12.3"
@@ -32,6 +32,7 @@ slotmap = "1.0.7"
 thiserror = "2.0.11"
 tiff = "0.9.1"
 web-time = { version = "1.1.0", default-features = false }
+wgpu-profiler = "0.22.0"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
