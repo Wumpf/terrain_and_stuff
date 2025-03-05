@@ -22,11 +22,11 @@ impl PrimaryDepthBuffer {
         },
     };
 
-    pub const STATE_IGNORE: wgpu::DepthStencilState = wgpu::DepthStencilState {
-        depth_write_enabled: false,
-        depth_compare: wgpu::CompareFunction::Always,
-        ..Self::STATE_WRITE
-    };
+    // pub const STATE_IGNORE: wgpu::DepthStencilState = wgpu::DepthStencilState {
+    //     depth_write_enabled: false,
+    //     depth_compare: wgpu::CompareFunction::Always,
+    //     ..Self::STATE_WRITE
+    // };
 
     pub fn new(device: &wgpu::Device, resolution: glam::UVec2) -> Self {
         let size = wgpu::Extent3d {

@@ -8,7 +8,7 @@ mod shaders_embedded;
 mod atmosphere;
 mod camera;
 mod egui_minifb;
-mod gui;
+mod gui_window;
 mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
@@ -252,8 +252,6 @@ impl Application<'_> {
                 .on_resize(&self.device, &self.primary_depth_buffer);
         }
 
-        self.camera.update(delta_time, &self.window);
-
         while let Some(new_profiler_results) = self
             .gpu_profiler
             .as_mut()
@@ -266,9 +264,18 @@ impl Application<'_> {
             self.last_gpu_profiler_results.push(new_profiler_results);
         }
 
+        let mut mouse_does_ui_interaction = false;
         self.gui.update(&self.window, |egui_ctx| {
-            gui::run_gui(egui_ctx, &self.last_gpu_profiler_results);
+            gui_window::run_gui(
+                egui_ctx,
+                &self.last_gpu_profiler_results,
+                &mut mouse_does_ui_interaction,
+            );
         });
+
+        if !mouse_does_ui_interaction {
+            self.camera.update(delta_time, &self.window);
+        }
     }
 
     pub fn draw(&mut self) {

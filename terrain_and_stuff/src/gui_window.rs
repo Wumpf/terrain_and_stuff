@@ -1,10 +1,11 @@
 pub fn run_gui(
     egui_ctx: &egui::Context,
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
+    contains_pointer: &mut bool,
 ) {
-    egui::Window::new("Controls").show(egui_ctx, |ui| {
+    let response = egui::Window::new("Controls").show(egui_ctx, |ui| {
         egui::CollapsingHeader::new("GPU Profiling")
-            .open(Some(true))
+            .default_open(true)
             .show(ui, |ui| {
                 let Some(last_result) = last_gpu_profiler_results.last() else {
                     ui.label("No profiling results available");
@@ -15,6 +16,8 @@ pub fn run_gui(
                 list_gpu_profiling_results_recursive(ui, &last_result);
             });
     });
+
+    *contains_pointer = response.map_or(false, |r| r.response.contains_pointer());
 }
 
 fn list_gpu_profiling_results_recursive(
@@ -36,7 +39,8 @@ fn list_gpu_profiling_results_recursive(
             ui.label(label);
         } else {
             egui::CollapsingHeader::new(label)
-                .open(Some(true))
+                .id_salt(&query.label)
+                .default_open(true)
                 .show(ui, |ui| {
                     list_gpu_profiling_results_recursive(ui, &query.nested_queries);
                 });
