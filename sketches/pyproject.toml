@@ -1,0 +1,6 @@
+[project]
+name = "sketches"
+version = "0.1.0"
+description = "Accompanying scripts, mostly fiddling around with things"
+requires-python = ">=3.11"
+dependencies = ["rerun-sdk==0.22.1"]
