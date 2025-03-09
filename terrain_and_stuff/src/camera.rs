@@ -1,6 +1,8 @@
 pub struct Camera {
-    position: glam::Vec3,
-    world_from_view_rot: glam::Quat,
+    pub position: glam::Vec3,
+    pub world_from_view_rot: glam::Quat,
+    pub movement_speed: f32,
+
     last_mouse_pos: Option<(f32, f32)>,
 }
 
@@ -13,6 +15,7 @@ impl Camera {
             position: glam::vec3(0.0, 0.0, 0.0),
             world_from_view_rot: glam::Quat::IDENTITY,
             last_mouse_pos: None,
+            movement_speed: 100.0,
         }
     }
 
@@ -27,7 +30,7 @@ impl Camera {
         local_movement.y += window.is_key_down(minifb::Key::E) as i32 as f32;
         local_movement = local_movement.normalize_or_zero();
 
-        let mut speed = 100.0;
+        let mut speed = self.movement_speed;
         if window.is_key_down(minifb::Key::LeftShift) {
             speed *= 10.0;
         } else if window.is_key_down(minifb::Key::LeftCtrl) {
@@ -76,10 +79,6 @@ impl Camera {
 
     pub fn projection_from_view(&self, aspect_ratio: f32) -> glam::Mat4 {
         glam::Mat4::perspective_infinite_reverse_lh(FOV_RADIANS, aspect_ratio, 0.1)
-    }
-
-    pub fn position(&self) -> glam::Vec3 {
-        self.position
     }
 
     pub fn forward(&self) -> glam::Vec3 {

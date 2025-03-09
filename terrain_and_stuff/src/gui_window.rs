@@ -1,9 +1,12 @@
-use crate::atmosphere::AtmosphereParams;
+use egui::Widget;
+
+use crate::{atmosphere::AtmosphereParams, camera::Camera};
 
 pub fn run_gui(
     egui_ctx: &egui::Context,
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
     atmosphere: &mut AtmosphereParams,
+    camera: &mut Camera,
     contains_pointer: &mut bool,
 ) {
     let response = egui::Window::new("Controls").show(egui_ctx, |ui| {
@@ -17,6 +20,22 @@ pub fn run_gui(
 
                     ui.label("Sun altitude: ");
                     ui.drag_angle(&mut atmosphere.sun_altitude);
+                    ui.end_row();
+                });
+            });
+
+        egui::CollapsingHeader::new("Camera")
+            .default_open(false)
+            .show(ui, |ui| {
+                egui::Grid::new("camera").show(ui, |ui| {
+                    ui.label("Position ");
+                    egui::DragValue::new(&mut camera.position.x).ui(ui);
+                    egui::DragValue::new(&mut camera.position.y).ui(ui);
+                    egui::DragValue::new(&mut camera.position.z).ui(ui);
+                    ui.end_row();
+
+                    ui.label("Speed: ");
+                    egui::DragValue::new(&mut camera.movement_speed).ui(ui);
                     ui.end_row();
                 });
             });

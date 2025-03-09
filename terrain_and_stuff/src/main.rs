@@ -270,6 +270,7 @@ impl Application<'_> {
                 egui_ctx,
                 &self.last_gpu_profiler_results,
                 &mut self.atmosphere.parameters,
+                &mut self.camera,
                 &mut mouse_does_ui_interaction,
             );
         });
@@ -298,7 +299,7 @@ impl Application<'_> {
                 view_from_world: view_from_world.into(),
                 projection_from_view: projection_from_view.into(),
                 projection_from_world: (projection_from_view * view_from_world).into(),
-                camera_position: self.camera.position().into(),
+                camera_position: self.camera.position.into(),
                 camera_forward: self.camera.forward().into(),
                 tan_half_fov: self.camera.tan_half_fov(aspect_ratio).into(),
                 dir_to_sun: self.atmosphere.parameters.dir_to_sun().into(),
