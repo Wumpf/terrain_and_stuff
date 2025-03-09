@@ -25,7 +25,7 @@ NUM_SAMPLES = 1024
 
 
 def halton(n, base):
-    """Generate Halton sequence for z and t"""
+    """Generate Halton sequence"""
     h = np.zeros(n)
     for i in range(n):
         f = 1

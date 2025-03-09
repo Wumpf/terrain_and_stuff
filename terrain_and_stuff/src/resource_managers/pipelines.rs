@@ -16,6 +16,9 @@ pub struct ShaderEntryPoint {
 
     /// The actual shader entry point. If `None`, picks entry point with first matching type.
     pub function_name: Option<String>,
+
+    /// Pipeline overridable constants.
+    pub overrides: Vec<(&'static str, f64)>,
 }
 
 impl ShaderEntryPoint {
@@ -24,6 +27,7 @@ impl ShaderEntryPoint {
         Self {
             path: path.into(),
             function_name: None,
+            overrides: Vec::new(),
         }
     }
 }
@@ -328,13 +332,19 @@ fn create_wgpu_render_pipeline(
         vertex: wgpu::VertexState {
             module: vertex_shader_module,
             entry_point: descriptor.vertex_shader.function_name.as_deref(),
-            compilation_options: pipeline_compilation_options(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &descriptor.vertex_shader.overrides,
+                zero_initialize_workgroup_memory: false,
+            },
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module: fragment_shader_module,
             entry_point: descriptor.fragment_shader.function_name.as_deref(),
-            compilation_options: pipeline_compilation_options(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &descriptor.fragment_shader.overrides,
+                zero_initialize_workgroup_memory: false,
+            },
             targets: &targets,
         }),
         primitive: descriptor.primitive,
@@ -368,14 +378,13 @@ fn create_wgpu_compute_pipeline(
         layout: Some(&descriptor.layout),
         entry_point: descriptor.compute_shader.function_name.as_deref(),
         module: compute_shader_module,
-        compilation_options: pipeline_compilation_options(),
+        compilation_options: wgpu::PipelineCompilationOptions {
+            constants: &descriptor.compute_shader.overrides,
+            zero_initialize_workgroup_memory: false,
+        },
         cache: None,
     };
     let pipeline = device.create_compute_pipeline(&wgpu_desc);
 
     Ok((pipeline, compute_shader_handle))
-}
-
-fn pipeline_compilation_options() -> wgpu::PipelineCompilationOptions<'static> {
-    wgpu::PipelineCompilationOptions::default()
 }

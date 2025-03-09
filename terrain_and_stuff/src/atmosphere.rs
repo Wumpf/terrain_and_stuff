@@ -1,5 +1,7 @@
 use std::num::NonZeroU64;
 
+use wgpu::util::DeviceExt;
+
 use crate::{
     EncoderScope,
     primary_depth_buffer::PrimaryDepthBuffer,
@@ -8,7 +10,10 @@ use crate::{
         ComputePipelineDescriptor, ComputePipelineHandle, GlobalBindings, PipelineError,
         PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
     },
-    wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc},
+    wgpu_utils::{
+        BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc,
+        wgpu_buffer_types::Vec3RowPadded,
+    },
 };
 
 #[derive(Debug)]
@@ -56,13 +61,15 @@ pub struct Atmosphere {
     pub parameters: AtmosphereParams,
 }
 
-impl Atmosphere {
-    const TRANSMITTANCE_LUT_SIZE: wgpu::Extent3d = wgpu::Extent3d {
-        width: 256,
-        height: 64,
-        depth_or_array_layers: 1,
-    };
+const TRANSMITTANCE_LUT_SIZE: wgpu::Extent3d = wgpu::Extent3d {
+    width: 256,
+    height: 64,
+    depth_or_array_layers: 1,
+};
 
+const NUM_SH_SAMPLES: u32 = 1024;
+
+impl Atmosphere {
     pub fn new(
         device: &wgpu::Device,
         global_bindings: &GlobalBindings,
@@ -79,7 +86,7 @@ impl Atmosphere {
 
             let transmittance_lut = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Transmittance LUT"),
-                size: Self::TRANSMITTANCE_LUT_SIZE,
+                size: TRANSMITTANCE_LUT_SIZE,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -172,7 +179,7 @@ impl Atmosphere {
         );
 
         let sh_coefficients_buffer_size = (1 + 3 + 5) * // SH bands 0, 1, 2
-            (3 * std::mem::size_of::<f32>() as u64); // Color for each band
+            (std::mem::size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
         let sh_coefficients = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SH coefficients"),
             size: sh_coefficients_buffer_size,
@@ -182,7 +189,22 @@ impl Atmosphere {
 
         // Compute pipeline for computing SH coefficients.
         let (compute_pipe_sh, compute_sh_bind_group) = {
+            let sampling_directions = generate_sampling_directions(NUM_SH_SAMPLES);
+            let sampling_directions_buffer =
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Sampling directions"),
+                    contents: bytemuck::cast_slice(sampling_directions.as_slice()),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
             let bindings = BindGroupLayoutBuilder::new()
+                // [in] sampling directions
+                .next_binding_compute(wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(sampling_directions_buffer.size()),
+                })
+                // [out] sh coefficients
                 .next_binding_compute(wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
@@ -201,11 +223,18 @@ impl Atmosphere {
                 ComputePipelineDescriptor {
                     debug_label: "atmosphere/sh".to_owned(),
                     layout: compute_layout,
+                    // TODO: naga_oil doesn't support override constants, it has its own preprocessor, but then have to do this at shader load
+                    // compute_shader: ShaderEntryPoint {
+                    //     path: "atmosphere/compute_sh.wgsl".into(),
+                    //     function_name: None,
+                    //     overrides: vec![("NUM_SAMPLES", NUM_SH_SAMPLES as f64)],
+                    // },
                     compute_shader: ShaderEntryPoint::first_in("atmosphere/compute_sh.wgsl"),
                 },
             )?;
 
             let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
+                .buffer(sampling_directions_buffer.as_entire_buffer_binding())
                 .buffer(sh_coefficients.as_entire_buffer_binding())
                 .create(device, "atmosphere/compute_sh");
 
@@ -303,4 +332,21 @@ impl Atmosphere {
 
         Ok(())
     }
+}
+
+fn generate_sampling_directions(num_samples: u32) -> Vec<Vec3RowPadded> {
+    use crate::sampling::halton;
+
+    (0..num_samples)
+        .map(|i| {
+            let z = halton(i, 2) * 2.0 - 1.0;
+            let t = halton(i, 3) * std::f32::consts::TAU;
+            let r = (1.0 - z * z).sqrt();
+
+            let x = r * t.cos();
+            let y = r * t.sin();
+
+            glam::vec3(x, y, z).into()
+        })
+        .collect()
 }

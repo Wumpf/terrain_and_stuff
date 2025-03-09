@@ -22,7 +22,7 @@ bytemuck = { version = "1.12.3", features = ["derive"] }
 ddsfile = "0.5.2"
 egui = "0.31.0"
 egui-wgpu = { version = "0.31.0", default-features = false }
-glam = "0.29.0"
+glam = { version = "0.30.0", features = ["bytemuck"] }
 itertools = "0.14.0"
 log = "0.4.22"                                               # Logging, mostly since println can't be used on the web.
 minifb = "0.28.0"

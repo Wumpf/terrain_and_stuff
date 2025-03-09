@@ -13,6 +13,7 @@ mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
 mod result_ext;
+mod sampling;
 mod terrain;
 mod wgpu_error_handling;
 mod wgpu_utils;
@@ -119,18 +120,30 @@ impl Application<'_> {
             .context("Failed to find an appropriate adapter")?;
         log::info!("Created wgpu adapter: {:?}", adapter.get_info());
 
-        let required_features = wgpu::Features::from(wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING)
-            | wgpu_profiler::GpuProfiler::ALL_WGPU_TIMER_FEATURES.intersection(adapter.features());
+        let optional_features = wgpu_profiler::GpuProfiler::ALL_WGPU_TIMER_FEATURES;
+        let required_features = wgpu::Features::from(wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING);
+        let required_limits = wgpu::Limits {
+            // Using larger workgroups makes sky SH convolution shader simpler.
+            // 1024 is widely supported
+            // https://web3dsurvey.com/webgpu/limits/maxComputeWorkgroupSizeX
+            // https://web3dsurvey.com/webgpu/limits/maxComputeInvocationsPerWorkgroup
+            max_compute_workgroup_size_x: 1024,
+            max_compute_invocations_per_workgroup: 1024,
+
+            ..wgpu::Limits::default()
+        };
 
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
-                    required_features,
+                    required_features: required_features
+                        | optional_features.intersection(adapter.features()),
                     // Useful for debugging.
                     //#[cfg(not(target_arch = "wasm32"))]
                     //required_features: required_features | wgpu::FeaturesWebGPU::POLYGON_MODE_LINE,
-                    ..Default::default()
+                    required_limits,
+                    memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )
