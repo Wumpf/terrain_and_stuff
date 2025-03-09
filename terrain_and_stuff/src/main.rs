@@ -389,7 +389,7 @@ impl Application<'_> {
 
     fn draw_scene(&self, encoder: &mut EncoderScope<'_>) {
         self.atmosphere
-            .prepare(encoder, &self.pipeline_manager)
+            .prepare(encoder, &self.pipeline_manager, &self.global_bindings)
             .ok_or_log("prepare sky");
 
         {

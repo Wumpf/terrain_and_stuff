@@ -3,8 +3,8 @@ use crate::{
     primary_depth_buffer::PrimaryDepthBuffer,
     render_output::HdrBackbuffer,
     resource_managers::{
-        GlobalBindings, PipelineError, PipelineManager, RenderPipelineDescriptor,
-        RenderPipelineHandle, ShaderEntryPoint,
+        ComputePipelineDescriptor, ComputePipelineHandle, GlobalBindings, PipelineError,
+        PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle, ShaderEntryPoint,
     },
     wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc},
 };
@@ -41,6 +41,8 @@ impl AtmosphereParams {
 pub struct Atmosphere {
     render_pipe_transmittance_lut: RenderPipelineHandle,
     render_pipe_raymarch_sky: RenderPipelineHandle,
+
+    compute_pipe_sh: ComputePipelineHandle,
 
     raymarch_bindgroup_layout: BindGroupLayoutWithDesc,
     raymarch_bindgroup: wgpu::BindGroup,
@@ -124,7 +126,7 @@ impl Atmosphere {
         // Raymarch.
         let render_pipe_raymarch_sky = {
             let raymarch_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("EmptyLayout"),
+                label: Some("RaymarchLayout"),
                 bind_group_layouts: &[
                     &global_bindings.bind_group_layout.layout,
                     &raymarch_bindgroup_layout.layout,
@@ -165,9 +167,28 @@ impl Atmosphere {
             primary_depth_buffer,
         );
 
+        // Compute pipeline for computing SH coefficients.
+        let compute_pipe_sh = {
+            let compute_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("compute sh layout"),
+                bind_group_layouts: &[&global_bindings.bind_group_layout.layout],
+                push_constant_ranges: &[],
+            });
+
+            pipeline_manager.create_compute_pipeline(
+                device,
+                ComputePipelineDescriptor {
+                    debug_label: "atmosphere/sh".to_owned(),
+                    layout: compute_layout,
+                    compute_shader: ShaderEntryPoint::first_in("atmosphere/compute_sh.wgsl"),
+                },
+            )?
+        };
+
         Ok(Self {
             render_pipe_transmittance_lut,
             render_pipe_raymarch_sky,
+            compute_pipe_sh,
             raymarch_bindgroup_layout,
             raymarch_bindgroup,
             transmittance_lut,
@@ -200,29 +221,39 @@ impl Atmosphere {
         &self,
         encoder: &mut EncoderScope<'_>,
         pipeline_manager: &PipelineManager,
+        global_bindings: &GlobalBindings,
     ) -> Result<(), PipelineError> {
-        let mut render_pass = encoder.scoped_render_pass(
-            "atmosphere/transmittance_lut",
-            wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.transmittance_lut,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            },
-        );
+        let mut encoder = encoder.scope("Prepare atmosphere");
+        {
+            let mut compute_pass = encoder.scoped_compute_pass("SH coefficients");
+            compute_pass.set_pipeline(pipeline_manager.get_compute_pipeline(self.compute_pipe_sh)?);
+            compute_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
+            compute_pass.dispatch_workgroups(1, 1, 1);
+        }
+        {
+            let mut render_pass = encoder.scoped_render_pass(
+                "Transmittance LUT",
+                wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.transmittance_lut,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                },
+            );
 
-        render_pass.set_pipeline(
-            pipeline_manager.get_render_pipeline(self.render_pipe_transmittance_lut)?,
-        );
-        render_pass.draw(0..3, 0..1);
+            render_pass.set_pipeline(
+                pipeline_manager.get_render_pipeline(self.render_pipe_transmittance_lut)?,
+            );
+            render_pass.draw(0..3, 0..1);
+        }
 
         Ok(())
     }
@@ -234,7 +265,7 @@ impl Atmosphere {
     ) -> Result<(), PipelineError> {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_raymarch_sky)?;
 
-        rpass.push_debug_group("atmosphere/raymarch_sky");
+        rpass.push_debug_group("Raymarch Atmosphere");
         rpass.set_bind_group(1, &self.raymarch_bindgroup, &[]);
         rpass.set_pipeline(pipeline);
         rpass.draw(0..3, 0..1);

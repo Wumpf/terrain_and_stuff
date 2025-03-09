@@ -5,6 +5,7 @@ use itertools::{self as _};
 use super::shader_cache::{ShaderCache, ShaderCacheError, ShaderHandle};
 
 slotmap::new_key_type! { pub struct RenderPipelineHandle; }
+slotmap::new_key_type! { pub struct ComputePipelineHandle; }
 
 #[cfg(not(target_arch = "wasm32"))]
 const SHADERS_DIR: &str = "terrain_and_stuff/shaders";
@@ -50,6 +51,24 @@ struct RenderPipelineEntry {
     shader_handles: HashSet<ShaderHandle>,
 }
 
+/// Render pipeline descriptor, mostly a copy of [`wgpu::ComputePipelineDescriptor`],
+/// but without the lifetime dependencies & special handling for shaders.
+///
+/// Also, leaving out some fields  that I don't need & simplifying others.
+/// (like vertex buffers. Srsly who needs vertex buffers in this time and day when you can just always do programmable pulling ;-))
+pub struct ComputePipelineDescriptor {
+    pub debug_label: String,
+    pub layout: wgpu::PipelineLayout, // TODO: pipeline layout sharing? Add a manager? Probably not that important.
+    pub compute_shader: ShaderEntryPoint,
+}
+
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+struct ComputePipelineEntry {
+    pipeline: wgpu::ComputePipeline,
+    descriptor: ComputePipelineDescriptor,
+    shader_handle: ShaderHandle,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum PipelineError {
     #[cfg(not(target_arch = "wasm32"))]
@@ -70,6 +89,8 @@ pub struct PipelineManager {
     shader_cache: ShaderCache,
     render_pipelines: slotmap::SlotMap<RenderPipelineHandle, RenderPipelineEntry>,
     render_pipelines_with_broken_shaders: HashSet<RenderPipelineHandle>,
+    compute_pipelines: slotmap::SlotMap<ComputePipelineHandle, ComputePipelineEntry>,
+    compute_pipelines_with_broken_shaders: HashSet<ComputePipelineHandle>,
 
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     shader_change_rx: std::sync::mpsc::Receiver<PathBuf>,
@@ -122,7 +143,8 @@ impl PipelineManager {
             shader_cache: ShaderCache::new(),
             render_pipelines: slotmap::SlotMap::default(),
             render_pipelines_with_broken_shaders: HashSet::new(),
-            //compute_pipelines: slotmap::SlotMap::default(),
+            compute_pipelines: slotmap::SlotMap::default(),
+            compute_pipelines_with_broken_shaders: HashSet::new(),
             shader_change_rx,
             #[cfg(not(target_arch = "wasm32"))]
             _filewatcher: filewatcher,
@@ -155,6 +177,32 @@ impl PipelineManager {
             .ok_or(PipelineError::MissingPipeline)
     }
 
+    pub fn create_compute_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        descriptor: ComputePipelineDescriptor,
+    ) -> Result<ComputePipelineHandle, PipelineError> {
+        let (pipeline, shader_handle) =
+            create_wgpu_compute_pipeline(&mut self.shader_cache, &descriptor, device)?;
+        let handle = self.compute_pipelines.insert(ComputePipelineEntry {
+            pipeline,
+            descriptor,
+            shader_handle,
+        });
+
+        Ok(handle)
+    }
+
+    pub fn get_compute_pipeline(
+        &self,
+        handle: ComputePipelineHandle,
+    ) -> Result<&wgpu::ComputePipeline, PipelineError> {
+        self.compute_pipelines
+            .get(handle)
+            .map(|entry| &entry.pipeline)
+            .ok_or(PipelineError::MissingPipeline)
+    }
+
     #[cfg(target_arch = "wasm32")]
     pub fn reload_changed_pipelines(&mut self, _device: &wgpu::Device) {}
 
@@ -178,6 +226,8 @@ impl PipelineManager {
             let removed_shaders = self.shader_cache.remove_shader_for_path(relative_path);
 
             // Try to recreate all pipelines that use this shader.
+            // Separate for compute & render pipelines - a bit repeititive, but it's not like we're gonna add more types any time soon.
+
             for (render_pipeline_handle, render_pipeline) in self.render_pipelines.iter_mut() {
                 let affected_by_removed_shaders = removed_shaders
                     .iter()
@@ -209,6 +259,40 @@ impl PipelineManager {
                         log::error!("Failed to recreate pipeline {label:?}:\n{err}");
                         self.render_pipelines_with_broken_shaders
                             .insert(render_pipeline_handle);
+                    }
+                }
+            }
+            for (compute_pipeline_handle, compute_pipeline) in self.compute_pipelines.iter_mut() {
+                let affected_by_removed_shaders = removed_shaders
+                    .iter()
+                    .any(|removed_shader| &compute_pipeline.shader_handle == removed_shader);
+                // Any pipeline that previously failed to reload no longer points to valid shaders which is why we have to check them separately.
+                let waiting_for_repaired_shader = self
+                    .compute_pipelines_with_broken_shaders
+                    .contains(&compute_pipeline_handle);
+
+                if !affected_by_removed_shaders && !waiting_for_repaired_shader {
+                    continue;
+                }
+
+                let label = &compute_pipeline.descriptor.debug_label;
+                log::info!("Recreating pipeline {label:?}");
+
+                match create_wgpu_compute_pipeline(
+                    &mut self.shader_cache,
+                    &compute_pipeline.descriptor,
+                    device,
+                ) {
+                    Ok((wgpu_pipeline, shader_handles)) => {
+                        compute_pipeline.pipeline = wgpu_pipeline;
+                        compute_pipeline.shader_handle = shader_handles;
+                        self.compute_pipelines_with_broken_shaders
+                            .remove(&compute_pipeline_handle);
+                    }
+                    Err(err) => {
+                        log::error!("Failed to recreate pipeline {label:?}:\n{err}");
+                        self.compute_pipelines_with_broken_shaders
+                            .insert(compute_pipeline_handle);
                     }
                 }
             }
@@ -266,6 +350,30 @@ fn create_wgpu_render_pipeline(
         .collect();
 
     Ok((pipeline, shader_handles))
+}
+
+fn create_wgpu_compute_pipeline(
+    shader_cache: &mut ShaderCache,
+    descriptor: &ComputePipelineDescriptor,
+    device: &wgpu::Device,
+) -> Result<(wgpu::ComputePipeline, ShaderHandle), PipelineError> {
+    let compute_shader_handle =
+        shader_cache.get_or_load_shader_module(device, &descriptor.compute_shader.path)?;
+    let compute_shader_module = shader_cache
+        .shader_module(compute_shader_handle)
+        .expect("Invalid shader handle");
+
+    let wgpu_desc = wgpu::ComputePipelineDescriptor {
+        label: Some(&descriptor.debug_label),
+        layout: Some(&descriptor.layout),
+        entry_point: descriptor.compute_shader.function_name.as_deref(),
+        module: compute_shader_module,
+        compilation_options: pipeline_compilation_options(),
+        cache: None,
+    };
+    let pipeline = device.create_compute_pipeline(&wgpu_desc);
+
+    Ok((pipeline, compute_shader_handle))
 }
 
 fn pipeline_compilation_options() -> wgpu::PipelineCompilationOptions<'static> {
