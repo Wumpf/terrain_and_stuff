@@ -49,12 +49,12 @@ pub fn run_gui(
                 };
 
                 // TODO: Make use of more results.
-                list_gpu_profiling_results_recursive(ui, &last_result);
+                list_gpu_profiling_results_recursive(ui, last_result);
             });
     });
 
     *uses_cursor =
-        egui_ctx.is_using_pointer() || response.map_or(false, |r| r.response.contains_pointer());
+        egui_ctx.is_using_pointer() || response.is_some_and(|r| r.response.contains_pointer());
 }
 
 fn list_gpu_profiling_results_recursive(
@@ -69,7 +69,7 @@ fn list_gpu_profiling_results_recursive(
                 query.label
             )
         } else {
-            format!("{}", query.label)
+            query.label.to_string()
         };
 
         if query.nested_queries.is_empty() {

@@ -51,7 +51,7 @@ impl EguiMinifb {
         let new_mouse_state = MouseState {
             pos: window
                 .get_mouse_pos(minifb::MouseMode::Clamp)
-                .map(|(x, y)| egui::Pos2::new(x as f32, y as f32))
+                .map(|(x, y)| egui::Pos2::new(x, y))
                 .unwrap_or_default(),
             left: window.get_mouse_down(minifb::MouseButton::Left),
             middle: window.get_mouse_down(minifb::MouseButton::Middle),
