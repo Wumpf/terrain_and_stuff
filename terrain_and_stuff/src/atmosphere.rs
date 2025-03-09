@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use crate::{
     EncoderScope,
     primary_depth_buffer::PrimaryDepthBuffer,
@@ -46,8 +48,10 @@ pub struct Atmosphere {
 
     raymarch_bindgroup_layout: BindGroupLayoutWithDesc,
     raymarch_bindgroup: wgpu::BindGroup,
+    compute_sh_bind_group: wgpu::BindGroup,
 
     transmittance_lut: wgpu::TextureView,
+    sh_coefficients: wgpu::Buffer,
 
     pub parameters: AtmosphereParams,
 }
@@ -167,22 +171,45 @@ impl Atmosphere {
             primary_depth_buffer,
         );
 
+        let sh_coefficients_buffer_size = (1 + 3 + 5) * // SH bands 0, 1, 2
+            (3 * std::mem::size_of::<f32>() as u64); // Color for each band
+        let sh_coefficients = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("SH coefficients"),
+            size: sh_coefficients_buffer_size,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
         // Compute pipeline for computing SH coefficients.
-        let compute_pipe_sh = {
+        let (compute_pipe_sh, compute_sh_bind_group) = {
+            let bindings = BindGroupLayoutBuilder::new()
+                .next_binding_compute(wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(sh_coefficients_buffer_size),
+                })
+                .create(device, "atmosphere/sh");
+
             let compute_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute sh layout"),
-                bind_group_layouts: &[&global_bindings.bind_group_layout.layout],
+                bind_group_layouts: &[&global_bindings.bind_group_layout.layout, &bindings.layout],
                 push_constant_ranges: &[],
             });
 
-            pipeline_manager.create_compute_pipeline(
+            let pipeline = pipeline_manager.create_compute_pipeline(
                 device,
                 ComputePipelineDescriptor {
                     debug_label: "atmosphere/sh".to_owned(),
                     layout: compute_layout,
                     compute_shader: ShaderEntryPoint::first_in("atmosphere/compute_sh.wgsl"),
                 },
-            )?
+            )?;
+
+            let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
+                .buffer(sh_coefficients.as_entire_buffer_binding())
+                .create(device, "atmosphere/compute_sh");
+
+            (pipeline, compute_sh_bind_group)
         };
 
         Ok(Self {
@@ -191,6 +218,8 @@ impl Atmosphere {
             compute_pipe_sh,
             raymarch_bindgroup_layout,
             raymarch_bindgroup,
+            compute_sh_bind_group,
+            sh_coefficients,
             transmittance_lut,
             parameters: AtmosphereParams::default(),
         })
@@ -228,6 +257,7 @@ impl Atmosphere {
             let mut compute_pass = encoder.scoped_compute_pass("SH coefficients");
             compute_pass.set_pipeline(pipeline_manager.get_compute_pipeline(self.compute_pipe_sh)?);
             compute_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
+            compute_pass.set_bind_group(1, &self.compute_sh_bind_group, &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
         {
