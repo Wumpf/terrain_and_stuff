@@ -13,10 +13,13 @@ struct FrameUniformBuffer {
     /// (tan(fov_y / 2) * aspect_ratio, tan(fov_y /2)), i.e. half ratio of screen dimension to screen distance in x & y.
     /// Both values are set to f32max for orthographic projection
     tan_half_fov: vec2f,
+
+    /// Normalized direction to the sun/moon in world space.
+    dir_to_sun: vec3f,
 };
 
 @group(0) @binding(0)
-var<uniform> frame: FrameUniformBuffer;
+var<uniform> frame_uniforms: FrameUniformBuffer;
 
 @group(0) @binding(1)
 var nearest_sampler_clamp: sampler;

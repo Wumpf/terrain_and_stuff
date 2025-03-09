@@ -1,4 +1,4 @@
-#import "global_bindings.wgsl"::{frame}
+#import "global_bindings.wgsl"::{frame_uniforms}
 
 @group(1) @binding(0)
 var heightmap: texture_2d<f32>;
@@ -50,18 +50,18 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
     // Normal via central difference
     let normal = normalize(vec3f(
-        (textureLoad(heightmap, plane_position + vec2i(1, 0), 0).r -
-        textureLoad(heightmap, plane_position - vec2i(1, 0), 0).r) * height_scale_factor,
+        (textureLoad(heightmap, plane_position - vec2i(1, 0), 0).r -
+        textureLoad(heightmap, plane_position + vec2i(1, 0), 0).r) * height_scale_factor,
         2.0,
-        (textureLoad(heightmap, plane_position + vec2i(0, 1), 0).r -
-        textureLoad(heightmap, plane_position - vec2i(0, 1), 0).r) * height_scale_factor,
+        (textureLoad(heightmap, plane_position - vec2i(0, 1), 0).r -
+        textureLoad(heightmap, plane_position + vec2i(0, 1), 0).r) * height_scale_factor,
     ));
 
     let world_position_2d = vec2f(plane_position) * grid_to_world;
     let world_position = vec3f(world_position_2d, height).xzy;
 
     var out: VertexOutput;
-    out.position = frame.projection_from_world * vec4f(world_position, 1.0);
+    out.position = frame_uniforms.projection_from_world * vec4f(world_position, 1.0);
     out.texcoord = world_position.xz / (grid_size_f * grid_to_world);
     out.normal = normal;
     return out;
@@ -71,13 +71,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
     let normal = normalize(in.normal);
-    // TODO: have the decency and use the same as atmosphere
-    let light_direction = normalize(vec3f(0.0, 10.0, 30.0));
 
-    let diffuse = max(dot(normal, light_direction), 0.0) * 0.8 + 0.2;
+    let diffuse = max(dot(normal, frame_uniforms.dir_to_sun), 0.0) * 0.8 + 0.2;
 
     return vec4f(diffuse,diffuse,diffuse, 1.0);
 
     // DEBUG:
-    //return vec4f(normal * 0.5 + 0.5, 1.0);
+   // return vec4f(normal * 0.5 + 0.5, 1.0);
 }

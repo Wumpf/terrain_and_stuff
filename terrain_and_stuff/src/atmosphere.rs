@@ -9,6 +9,35 @@ use crate::{
     wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc},
 };
 
+#[derive(Debug)]
+pub struct AtmosphereParams {
+    /// Sun's azimuth angle in radians.
+    pub sun_azimuth: f32,
+    /// Sun's altitude angle in radians.
+    pub sun_altitude: f32,
+}
+
+impl Default for AtmosphereParams {
+    fn default() -> Self {
+        Self {
+            sun_azimuth: std::f32::consts::PI,
+            sun_altitude: std::f32::consts::PI / 4.0,
+        }
+    }
+}
+
+impl AtmosphereParams {
+    pub fn dir_to_sun(&self) -> glam::Vec3 {
+        let (sin_altitude, cos_altitude) = self.sun_altitude.sin_cos();
+        let (sin_azimuth, cos_azimuth) = self.sun_azimuth.sin_cos();
+        glam::vec3(
+            cos_altitude * cos_azimuth,
+            sin_altitude,
+            cos_altitude * sin_azimuth,
+        )
+    }
+}
+
 pub struct Atmosphere {
     render_pipe_transmittance_lut: RenderPipelineHandle,
     render_pipe_raymarch_sky: RenderPipelineHandle,
@@ -17,6 +46,8 @@ pub struct Atmosphere {
     raymarch_bindgroup: wgpu::BindGroup,
 
     transmittance_lut: wgpu::TextureView,
+
+    pub parameters: AtmosphereParams,
 }
 
 impl Atmosphere {
@@ -140,6 +171,7 @@ impl Atmosphere {
             raymarch_bindgroup_layout,
             raymarch_bindgroup,
             transmittance_lut,
+            parameters: AtmosphereParams::default(),
         })
     }
 

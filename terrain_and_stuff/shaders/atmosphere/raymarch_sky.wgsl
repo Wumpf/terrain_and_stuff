@@ -21,7 +21,7 @@ enable dual_source_blending;
 
 #import "constants.wgsl"::{ERROR_RGBA}
 #import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
-#import "global_bindings.wgsl"::{trilinear_sampler_clamp, frame}
+#import "global_bindings.wgsl"::{trilinear_sampler_clamp, frame_uniforms}
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
@@ -126,21 +126,19 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let view_space_position = view_space_position_from_depth_buffer(depth_buffer_depth, texcoord);
     let geometry_distance_on_camera_ray = length(view_space_position);
 
-    let dir_to_sun = normalize(vec3f(0.0, 10.0, 30.0)); // TODO:
-
     // For our camera we generally assume a flat planet.
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
     let planet_relative_position_km = vec3(0.0, max(0.0, camera_ray.origin.y * 0.001) + ground_radius_km, 0.0);
 
     // Figure out where the ray hits either the planet or the atmosphere end.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
-    let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
+    let ray_to_sun_km = Ray(planet_relative_position_km, frame_uniforms.dir_to_sun);
     let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_radius_km);
     let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
     let atmosphere_or_ground_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
     let max_marching_distance_km = min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 
-    let result = raymarch_scattering(camera_ray, planet_relative_position_km, dir_to_sun, max_marching_distance_km);
+    let result = raymarch_scattering(camera_ray, planet_relative_position_km, frame_uniforms.dir_to_sun, max_marching_distance_km);
 
 
     // DEBUG:
@@ -157,7 +155,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     // Debug stuff:
     //return ScatteringResult(vec4f(fract(max_marching_distance_km * 0.1)), vec4f(0.0));
 
-    //let world_space_position = (view_space_position * frame.view_from_world).xyz + frame.camera_position;
+    //let world_space_position = (view_space_position * frame_uniforms.view_from_world).xyz + frame_uniforms.camera_position;
     //return ScatteringResult(vec4f(fract(abs(world_space_position) * 0.0001), 1.0), vec4f(0.0));
 
     //let trasmittance_lut = textureSample(transmittance_lut, trilinear_sampler_clamp, texcoord);

@@ -269,6 +269,7 @@ impl Application<'_> {
             gui_window::run_gui(
                 egui_ctx,
                 &self.last_gpu_profiler_results,
+                &mut self.atmosphere.parameters,
                 &mut mouse_does_ui_interaction,
             );
         });
@@ -300,6 +301,7 @@ impl Application<'_> {
                 camera_position: self.camera.position().into(),
                 camera_forward: self.camera.forward().into(),
                 tan_half_fov: self.camera.tan_half_fov(aspect_ratio).into(),
+                dir_to_sun: self.atmosphere.parameters.dir_to_sun().into(),
             },
         );
 

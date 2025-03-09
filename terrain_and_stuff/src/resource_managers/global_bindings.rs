@@ -19,6 +19,9 @@ pub struct FrameUniformBuffer {
     /// (tan(fov_y / 2) * aspect_ratio, tan(fov_y /2)), i.e. half ratio of screen dimension to screen distance in x & y.
     /// Both values are set to f32max for orthographic projection
     pub tan_half_fov: wgpu_buffer_types::Vec2RowPadded,
+
+    /// Direction to the sun or moon in world space.
+    pub dir_to_sun: wgpu_buffer_types::Vec3RowPadded,
 }
 
 pub struct GlobalBindings {

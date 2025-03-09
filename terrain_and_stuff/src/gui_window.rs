@@ -1,9 +1,26 @@
+use crate::atmosphere::AtmosphereParams;
+
 pub fn run_gui(
     egui_ctx: &egui::Context,
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
+    atmosphere: &mut AtmosphereParams,
     contains_pointer: &mut bool,
 ) {
     let response = egui::Window::new("Controls").show(egui_ctx, |ui| {
+        egui::CollapsingHeader::new("Atmosphere")
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::Grid::new("atmosphere_grid").show(ui, |ui| {
+                    ui.label("Sun azimuth: ");
+                    ui.drag_angle(&mut atmosphere.sun_azimuth);
+                    ui.end_row();
+
+                    ui.label("Sun altitude: ");
+                    ui.drag_angle(&mut atmosphere.sun_altitude);
+                    ui.end_row();
+                });
+            });
+
         egui::CollapsingHeader::new("GPU Profiling")
             .default_open(true)
             .show(ui, |ui| {
