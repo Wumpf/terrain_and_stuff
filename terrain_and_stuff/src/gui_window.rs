@@ -7,7 +7,7 @@ pub fn run_gui(
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
     atmosphere: &mut AtmosphereParams,
     camera: &mut Camera,
-    contains_pointer: &mut bool,
+    uses_cursor: &mut bool,
 ) {
     let response = egui::Window::new("Controls").show(egui_ctx, |ui| {
         egui::CollapsingHeader::new("Atmosphere")
@@ -53,7 +53,8 @@ pub fn run_gui(
             });
     });
 
-    *contains_pointer = response.map_or(false, |r| r.response.contains_pointer());
+    *uses_cursor =
+        egui_ctx.is_using_pointer() || response.map_or(false, |r| r.response.contains_pointer());
 }
 
 fn list_gpu_profiling_results_recursive(
