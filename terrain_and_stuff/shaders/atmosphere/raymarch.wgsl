@@ -18,7 +18,7 @@
 // by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
 #import "global_bindings.wgsl"::{trilinear_sampler_clamp}
-#import "intersections.wgsl"::{Ray}
+#import "intersections.wgsl"::{Ray, ray_sphere_intersect}
 
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
 #import "atmosphere/constants.wgsl"::{ground_radius_km, atmosphere_radius_km}
@@ -41,8 +41,17 @@ fn sample_transmittance_lut(transmittance_lut: texture_2d<f32>, altitude_km: f32
     return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }
 
-fn raymarch_scattering(transmittance_lut: texture_2d<f32>, camera_ray: Ray, planet_relative_position_km: vec3f, dir_to_sun: vec3f, max_marching_distance_km: f32) -> ScatteringResult {
-    let cos_theta = dot(camera_ray.direction, dir_to_sun);
+fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, planet_relative_position_km: vec3f, dir_to_sun: vec3f, geometry_distance_on_camera_ray: f32) -> ScatteringResult {
+    // Figure out where the ray hits either the planet or the atmosphere end.
+    // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
+    let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
+    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_radius_km);
+    let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
+    let atmosphere_or_ground_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
+    let max_marching_distance_km = min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
+
+
+    let cos_theta = dot(direction, dir_to_sun);
 
     let mie_phase = mie_phase(cos_theta);
     let rayleigh_phase = rayleigh_phase(cos_theta);
@@ -58,7 +67,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>, camera_ray: Ray, plan
         let dt = t_new - t;
         t = t_new;
 
-        let new_planet_relative_position_km = planet_relative_position_km + t * camera_ray.direction;
+        let new_planet_relative_position_km = planet_relative_position_km + t * direction;
         let altitude_km = clamp(length(new_planet_relative_position_km), ground_radius_km, atmosphere_radius_km) - ground_radius_km;
 
         let scattering = scattering_values_for(altitude_km);

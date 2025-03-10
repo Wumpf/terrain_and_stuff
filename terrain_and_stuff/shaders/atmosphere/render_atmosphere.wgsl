@@ -5,22 +5,18 @@ enable dual_source_blending;
 #import "constants.wgsl"::{ERROR_RGBA}
 #import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
 #import "global_bindings.wgsl"::{frame_uniforms}
-#import "intersections.wgsl"::{ray_sphere_intersect, Ray}
+#import "intersections.wgsl"::{Ray}
 
 #import "atmosphere/constants.wgsl"::{
     ground_radius_km,
-    atmosphere_radius_km,
     sun_diameteter_rad,
     sun_unscattered_luminance,
 }
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 
 
-@group(1) @binding(0)
-var transmittance_lut: texture_2d<f32>;
-
-@group(1) @binding(1)
-var screen_depth: texture_2d<f32>;
+@group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
+@group(1) @binding(1) var screen_depth: texture_2d<f32>;
 
 const NumScatteringSteps: f32 = 64.0;
 
@@ -51,15 +47,13 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
     let planet_relative_position_km = vec3(0.0, max(0.0, camera_ray.origin.y * 0.001) + ground_radius_km, 0.0);
 
-    // Figure out where the ray hits either the planet or the atmosphere end.
-    // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
-    let ray_to_sun_km = Ray(planet_relative_position_km, frame_uniforms.dir_to_sun);
-    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_radius_km);
-    let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
-    let atmosphere_or_ground_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
-    let max_marching_distance_km = min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
-
-    var result = raymarch_scattering(transmittance_lut, camera_ray, planet_relative_position_km, frame_uniforms.dir_to_sun, max_marching_distance_km);
+    var result = raymarch_scattering(
+        transmittance_lut,
+        camera_ray.direction,
+        planet_relative_position_km,
+        frame_uniforms.dir_to_sun,
+        geometry_distance_on_camera_ray
+    );
     result.scattering += sun_disk_luminance(camera_ray, frame_uniforms.dir_to_sun, result.transmittance);
 
     let fragment_result = FragmentResult(vec4f(result.scattering, 1.0), vec4f(result.transmittance, 1.0));

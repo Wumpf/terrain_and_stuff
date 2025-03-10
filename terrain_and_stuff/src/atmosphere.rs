@@ -200,6 +200,12 @@ impl Atmosphere {
                 });
 
             let bindings = BindGroupLayoutBuilder::new()
+                // [in] transmittance lut
+                .next_binding_compute(wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                })
                 // [in] sampling directions
                 .next_binding_compute(wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -236,6 +242,7 @@ impl Atmosphere {
             )?;
 
             let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
+                .texture(&transmittance_lut)
                 .buffer(sampling_directions_buffer.as_entire_buffer_binding())
                 .buffer(sh_coefficients.as_entire_buffer_binding())
                 .create(device, "atmosphere/compute_sh");
