@@ -47,7 +47,7 @@ impl AtmosphereParams {
 
 pub struct Atmosphere {
     render_pipe_transmittance_lut: RenderPipelineHandle,
-    render_pipe_raymarch_sky: RenderPipelineHandle,
+    render_pipe_render_atmosphere: RenderPipelineHandle,
 
     compute_pipe_sh: ComputePipelineHandle,
 
@@ -125,7 +125,7 @@ impl Atmosphere {
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 })
-                .create(device, "atmosphere/raymarch_sky");
+                .create(device, "atmosphere/render_atmosphere");
 
             (
                 transmittance_lut,
@@ -134,8 +134,8 @@ impl Atmosphere {
             )
         };
 
-        // Raymarch.
-        let render_pipe_raymarch_sky = {
+        // Render atmosphere.
+        let render_pipe_render_atmosphere = {
             let raymarch_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("RaymarchLayout"),
                 bind_group_layouts: &[
@@ -147,10 +147,12 @@ impl Atmosphere {
             pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
-                    debug_label: "atmosphere/raymarch_sky".to_owned(),
+                    debug_label: "atmosphere/render_atmosphere".to_owned(),
                     layout: raymarch_layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in("atmosphere/raymarch_sky.wgsl"),
+                    fragment_shader: ShaderEntryPoint::first_in(
+                        "atmosphere/render_atmosphere.wgsl",
+                    ),
                     fragment_targets: vec![wgpu::ColorTargetState {
                         format: HdrBackbuffer::FORMAT,
                         blend: Some(wgpu::BlendState {
@@ -243,7 +245,7 @@ impl Atmosphere {
 
         Ok(Self {
             render_pipe_transmittance_lut,
-            render_pipe_raymarch_sky,
+            render_pipe_render_atmosphere,
             compute_pipe_sh,
             raymarch_bindgroup_layout,
             raymarch_bindgroup,
@@ -263,7 +265,7 @@ impl Atmosphere {
         BindGroupBuilder::new(raymarch_bindings)
             .texture(transmittance_lut)
             .texture(primary_depth_buffer.view())
-            .create(device, "atmosphere/raymarch_sky")
+            .create(device, "atmosphere/render_atmosphere")
     }
 
     pub fn on_resize(&mut self, device: &wgpu::Device, primary_depth_buffer: &PrimaryDepthBuffer) {
@@ -322,7 +324,7 @@ impl Atmosphere {
         rpass: &mut wgpu::RenderPass<'_>,
         pipeline_manager: &PipelineManager,
     ) -> Result<(), PipelineError> {
-        let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_raymarch_sky)?;
+        let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_render_atmosphere)?;
 
         rpass.push_debug_group("Raymarch Atmosphere");
         rpass.set_bind_group(1, &self.raymarch_bindgroup, &[]);
