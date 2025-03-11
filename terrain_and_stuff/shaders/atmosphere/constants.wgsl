@@ -15,17 +15,20 @@ const mie_absorption_per_km_density: f32 = 0.004440;
 
 const ozone_absorption_per_km_density: vec3f = vec3f(0.000650, 0.001881, 0.000085);
 
+// Roughly the intensity Sun without any scattering
+// https://en.wikipedia.org/wiki/Luminance
+//const sun_unscattered_luminance: vec3f = vec3f(1.6, 1.6, 1.6) * 1000000000.0;
+// Okay that's just too much to work with practically 🤷
+// Instead we just use the sun as the grounding measure of things.
+const sun_illuminance: vec3f = vec3f(1.6, 1.6, 1.6);
+
 // Sun's angle is 0.5 degrees according to this.
 // https://www.nasa.gov/wp-content/uploads/2015/01/YOSS_Act_9.pdf
 //const sun_diameteter_rad = 0.5 * DEG_TO_RAD;
 // But it doesn't look that nice:
 // we'd need some really heavy bloom to account for the fact that this is an excrucingly bright spot.
 // See also `sun_unscattered_luminance` below.
-const sun_diameteter_rad = 1.0 * DEG_TO_RAD;
+const sun_disk_diameteter_rad = 1.0 * DEG_TO_RAD;
 
-
-// Roughly the intensity Sun without any scattering
-// https://en.wikipedia.org/wiki/Luminance
-//const sun_unscattered_luminance: vec3f = vec3f(1.6, 1.6, 1.6) * 1000000000.0;
-// Okay that's just too much to work with 🤷
-const sun_unscattered_luminance: vec3f = vec3f(1.6, 1.6, 1.6) * 1000.0;
+// When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
+const sun_disk_illuminance_factor: f32 = 1000.0;

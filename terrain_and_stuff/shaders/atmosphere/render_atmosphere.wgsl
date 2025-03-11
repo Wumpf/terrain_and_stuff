@@ -10,8 +10,8 @@ enable dual_source_blending;
 
 #import "atmosphere/constants.wgsl"::{
     ground_radius_km,
-    sun_diameteter_rad,
-    sun_unscattered_luminance,
+    sun_disk_diameteter_rad,
+    sun_disk_illuminance_factor,
 }
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 
@@ -28,12 +28,12 @@ struct FragmentResult {
 }
 
 fn sun_disk_luminance(camera_ray: Ray, dir_to_sun: vec3f, transmittance: vec3f) -> vec3f {
-    let sun = dot(camera_ray.direction, dir_to_sun) - cos(sun_diameteter_rad);
+    let sun = dot(camera_ray.direction, dir_to_sun) - cos(sun_disk_diameteter_rad);
     // Since the sun is so bright, this isn't giving us enough antialiasing yet.
     //let antialiased_sun = saturate(sun / (fwidth(sun) * 100.0));
     // Fudging this with a looks good enough.
     let antialiased_sun = saturate(sun / (fwidth(sun) * 1000.0));
-    return sun_unscattered_luminance * transmittance * antialiased_sun;
+    return sun_disk_illuminance_factor * transmittance * antialiased_sun;
 }
 
 @fragment

@@ -56,7 +56,7 @@ fn fs_main(@location(0) texcoord: vec2<f32>) -> @location(0) vec4<f32> {
     }
 
     // TODO: expose exposure factor
-    let exposure_factor = 1.0;
+    let exposure_factor = 1.5;
     hdr_backbuffer_color = hdr_backbuffer_color * exposure_factor;
 
     // Debug: Demonstrate how a bright single channel color moves towards white.

@@ -72,4 +72,6 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     parallel_reduce_shared_buffer(luminance_sample * sh_weight_20(direction), sample_index, 6);
     parallel_reduce_shared_buffer(luminance_sample * sh_weight_2p1(direction), sample_index, 7);
     parallel_reduce_shared_buffer(luminance_sample * sh_weight_2p2(direction), sample_index, 8);
+
+    // TODO? SH windowing to avoid negatives & ringing?
 }

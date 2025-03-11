@@ -21,7 +21,7 @@
 #import "intersections.wgsl"::{Ray, ray_sphere_intersect}
 
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
-#import "atmosphere/constants.wgsl"::{ground_radius_km, atmosphere_radius_km}
+#import "atmosphere/constants.wgsl"::{ground_radius_km, atmosphere_radius_km, sun_illuminance}
 
 const NumScatteringSteps: f32 = 64.0;
 
@@ -79,18 +79,19 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, pla
 
         // TODO: earth shadow at night?
         // https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/Resources/RenderSkyRayMarching.hlsl#L181
-        let earth_shadow = 1.0;
+        let planet_shadow = 1.0;
         // TODO: large shadow casters (like mountains or clouds)
         let shadow = 1.0;
 
         // Compute amount of light coming in via scattering.
         // Note that multi-scattering is unaffected by shadows (approximating it coming from distant sources).
         let phase_times_scattering = scattering.mie * mie_phase + scattering.rayleigh * rayleigh_phase;
-        let inscattering = earth_shadow * shadow * sun_transmittance * phase_times_scattering +
+        let inscattering = planet_shadow * shadow * sun_transmittance * phase_times_scattering +
                                 multiscattered_luminance * (scattering.rayleigh + scattering.mie);
+        let inscattering_luminance = sun_illuminance * inscattering;
 
         // Integrated scattering within path segment.
-        let scattering_integral = (inscattering - inscattering * sample_transmittance) / scattering.total_extinction;
+        let scattering_integral = (inscattering_luminance - inscattering_luminance * sample_transmittance) / scattering.total_extinction;
 
         luminance += scattering_integral * transmittance;
         transmittance *= sample_transmittance;
