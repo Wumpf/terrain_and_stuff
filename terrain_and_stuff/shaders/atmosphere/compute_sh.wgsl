@@ -14,7 +14,7 @@
     sh_weight_2p2,
 }
 
-#import "atmosphere/constants.wgsl"::{ground_radius_km}
+#import "atmosphere/constants.wgsl"::{ground_radius_km, sun_illuminance}
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 #import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
 
@@ -55,13 +55,16 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     let planet_relative_position_km = vec3f(0.0, ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
     let max_marching_distance_km = 999999999999.0;
 
-    var luminance_sample = raymarch_scattering(
+    var sample_raymarch_result = raymarch_scattering(
         transmittance_lut,
         direction,
         planet_relative_position_km,
         frame_uniforms.dir_to_sun,
         max_marching_distance_km
-    ).scattering;
+    );
+
+    // We're interested in the sky color, i.e. all the light that got scattered in.
+    let luminance_sample = sample_raymarch_result.scattering;
 
     parallel_reduce_shared_buffer(luminance_sample * sh_weight_00(direction), sample_index, 0);
 
@@ -79,14 +82,16 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
 
     // Compute sun luminance.
     if (sample_index == 0) {
-        var sun_luminance_sample = raymarch_scattering(
+        let sun_raymarch_result = raymarch_scattering(
             transmittance_lut,
             frame_uniforms.dir_to_sun,
             planet_relative_position_km,
             frame_uniforms.dir_to_sun,
             max_marching_distance_km
-        ).scattering;
+        );
 
-        sky_and_sun_lighting_params.sun_illuminance = sun_luminance_sample;
+        // For Sky color we're in-scattered light, but when we're looking directly into the sun,
+        // what we're seeing is the sun light itself transmitted through the atmosphere, which is why we have to use transmittance here.
+        sky_and_sun_lighting_params.sun_illuminance = sun_raymarch_result.transmittance * sun_illuminance;
     }
 }

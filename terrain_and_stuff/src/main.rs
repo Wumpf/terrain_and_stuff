@@ -178,9 +178,14 @@ impl Application<'_> {
             &primary_depth_buffer,
         )
         .context("Create sky renderer")?;
-        let terrain =
-            TerrainRenderer::new(&device, &queue, &global_bindings, &mut pipeline_manager)
-                .context("Create terrain renderer")?;
+        let terrain = TerrainRenderer::new(
+            &device,
+            &queue,
+            &global_bindings,
+            atmosphere.sun_and_sky_lighting_params_buffer(),
+            &mut pipeline_manager,
+        )
+        .context("Create terrain renderer")?;
 
         // Now that initialization is over (!), make sure to catch all errors, never crash, and deduplicate reported errors.
         // `on_uncaptured_error` is a last-resort handler which we should never hit,

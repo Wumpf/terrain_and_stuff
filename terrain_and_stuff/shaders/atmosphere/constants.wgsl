@@ -31,4 +31,4 @@ const sun_illuminance: vec3f = vec3f(1.6, 1.6, 1.6);
 const sun_disk_diameteter_rad = 1.0 * DEG_TO_RAD;
 
 // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
-const sun_disk_illuminance_factor: f32 = 1000.0;
+const sun_disk_illuminance_factor: f32 = 100.0;

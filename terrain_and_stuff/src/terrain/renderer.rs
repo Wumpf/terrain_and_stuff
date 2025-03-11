@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use wgpu::util::DeviceExt as _;
 
 use crate::{
@@ -20,6 +22,7 @@ impl TerrainRenderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         global_bindings: &GlobalBindings,
+        sky_and_sun_lighting_params_buffer: &wgpu::Buffer,
         pipeline_manager: &mut PipelineManager,
     ) -> Result<Self, PipelineError> {
         // Hardcoded heightmap for now. Want to generate eventually!
@@ -56,10 +59,17 @@ impl TerrainRenderer {
         };
 
         let bindgroup_layout = BindGroupLayoutBuilder::new()
+            // Heightmap.
             .next_binding_vertex(wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 view_dimension: wgpu::TextureViewDimension::D2,
                 multisampled: false,
+            })
+            // Sun color + SH coefficients.
+            .next_binding_fragment(wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: NonZeroU64::new(sky_and_sun_lighting_params_buffer.size()),
             })
             .create(device, "Terrain");
 
@@ -92,6 +102,7 @@ impl TerrainRenderer {
 
         let bindgroup = BindGroupBuilder::new(&bindgroup_layout)
             .texture(&heightmap_texture.create_view(&wgpu::TextureViewDescriptor::default()))
+            .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
             .create(device, "Terrain");
 
         Ok(Self {

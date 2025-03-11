@@ -1,7 +1,9 @@
 #import "global_bindings.wgsl"::{frame_uniforms}
+#import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
+#import "sh.wgsl"::{evaluate_sh2_cosine}
 
-@group(1) @binding(0)
-var heightmap: texture_2d<f32>;
+@group(1) @binding(0) var heightmap: texture_2d<f32>;
+@group(1) @binding(1) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 
 struct VertexOutput {
     // Mark output position as invariant so it's safe to use it with depth test Equal.
@@ -72,9 +74,13 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
     let normal = normalize(in.normal);
 
-    let diffuse = max(dot(normal, frame_uniforms.dir_to_sun), 0.0) * 0.8 + 0.2;
+    let illuminance_sky = evaluate_sh2_cosine(normal, sky_and_sun_lighting_params.sky_luminance_sh_coefficients);
+    let illuminance_direct = sky_and_sun_lighting_params.sun_illuminance * max(dot(normal, frame_uniforms.dir_to_sun), 0.0);
+    let illuminance = illuminance_direct + illuminance_sky;
 
-    return vec4f(diffuse,diffuse,diffuse, 1.0);
+    // TODO: the sky illuminance doesn't look quite right yet. let's add ui accessible debug flags.
+
+    return vec4f(illuminance, 1.0);
 
     // DEBUG:
    // return vec4f(normal * 0.5 + 0.5, 1.0);

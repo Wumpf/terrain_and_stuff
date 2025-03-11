@@ -56,7 +56,7 @@ pub struct Atmosphere {
     compute_sh_bind_group: wgpu::BindGroup,
 
     transmittance_lut: wgpu::TextureView,
-    sky_and_sun_lighting_params: wgpu::Buffer,
+    sky_and_sun_lighting_params_buffer: wgpu::Buffer,
 
     pub parameters: AtmosphereParams,
 }
@@ -79,7 +79,7 @@ impl Atmosphere {
         let sh_coefficients_buffer_size = (1 + 3 + 5 // SH bands 0, 1, 2
             + 1) * // Sun illuminance.
             (std::mem::size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
-        let sky_and_sun_lighting_params = device.create_buffer(&wgpu::BufferDescriptor {
+        let sky_and_sun_lighting_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SH coefficients"),
             size: sh_coefficients_buffer_size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM,
@@ -196,7 +196,7 @@ impl Atmosphere {
             &raymarch_bindgroup_layout,
             &transmittance_lut,
             primary_depth_buffer,
-            &sky_and_sun_lighting_params,
+            &sky_and_sun_lighting_params_buffer,
         );
 
         // Compute pipeline for computing SH coefficients.
@@ -254,7 +254,7 @@ impl Atmosphere {
             let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
                 .texture(&transmittance_lut)
                 .buffer(sampling_directions_buffer.as_entire_buffer_binding())
-                .buffer(sky_and_sun_lighting_params.as_entire_buffer_binding())
+                .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
                 .create(device, "atmosphere/compute_sh");
 
             (pipeline, compute_sh_bind_group)
@@ -267,7 +267,7 @@ impl Atmosphere {
             raymarch_bindgroup_layout,
             raymarch_bindgroup,
             compute_sh_bind_group,
-            sky_and_sun_lighting_params,
+            sky_and_sun_lighting_params_buffer,
             transmittance_lut,
             parameters: AtmosphereParams::default(),
         })
@@ -293,8 +293,12 @@ impl Atmosphere {
             &self.raymarch_bindgroup_layout,
             &self.transmittance_lut,
             primary_depth_buffer,
-            &self.sky_and_sun_lighting_params,
+            &self.sky_and_sun_lighting_params_buffer,
         );
+    }
+
+    pub fn sun_and_sky_lighting_params_buffer(&self) -> &wgpu::Buffer {
+        &self.sky_and_sun_lighting_params_buffer
     }
 
     pub fn prepare(
