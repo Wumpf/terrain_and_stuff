@@ -2,9 +2,6 @@
 
 #import "global_bindings.wgsl"::{frame_uniforms}
 #import "constants.wgsl"::{TAU}
-
-#import "atmosphere/constants.wgsl"::{ground_radius_km}
-#import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 #import "sh.wgsl"::{
     sh_weight_00,
     sh_weight_1n1,
@@ -17,6 +14,10 @@
     sh_weight_2p2,
 }
 
+#import "atmosphere/constants.wgsl"::{ground_radius_km}
+#import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
+#import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
+
 // naga_oil doesn't support override constants :(
 //override NUM_SAMPLES: u32;
 const NUM_SAMPLES: u32 = 1024;
@@ -24,7 +25,7 @@ const SAMPLE_NORMALIZATION_FACTOR: f32 = (1.0 / f32(NUM_SAMPLES)) * (2.0 * TAU);
 
 @group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
 @group(1) @binding(1) var<storage, read> sampling_directions: array<vec3f>;
-@group(1) @binding(2) var<storage, read_write> sh_coefficients: array<vec3f, 9>;
+@group(1) @binding(2) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 
 var<workgroup> shared_buffer: array<vec3f, NUM_SAMPLES>;
 
@@ -42,7 +43,8 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     }
 
     if (sample_index == 0) {
-        sh_coefficients[target_coefficient_index] = shared_buffer[0] * SAMPLE_NORMALIZATION_FACTOR;
+        sky_and_sun_lighting_params.
+            sky_luminance_sh_coefficients[target_coefficient_index] = shared_buffer[0] * SAMPLE_NORMALIZATION_FACTOR;
     }
 }
 
@@ -50,7 +52,7 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     let sample_index = id.x;
     let direction = sampling_directions[sample_index];
 
-    let planet_relative_position_km = vec3f(0.0, ground_radius_km + 0.5, 0.0); // Put the SH "probe" at 500m altitude.
+    let planet_relative_position_km = vec3f(0.0, ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
     let max_marching_distance_km = 999999999999.0;
 
     var luminance_sample = raymarch_scattering(
@@ -74,4 +76,17 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     parallel_reduce_shared_buffer(luminance_sample * sh_weight_2p2(direction), sample_index, 8);
 
     // TODO? SH windowing to avoid negatives & ringing?
+
+    // Compute sun luminance.
+    if (sample_index == 0) {
+        var sun_luminance_sample = raymarch_scattering(
+            transmittance_lut,
+            frame_uniforms.dir_to_sun,
+            planet_relative_position_km,
+            frame_uniforms.dir_to_sun,
+            max_marching_distance_km
+        ).scattering;
+
+        sky_and_sun_lighting_params.sun_illuminance = sun_luminance_sample;
+    }
 }

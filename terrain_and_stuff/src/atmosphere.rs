@@ -56,7 +56,7 @@ pub struct Atmosphere {
     compute_sh_bind_group: wgpu::BindGroup,
 
     transmittance_lut: wgpu::TextureView,
-    sh_coefficients: wgpu::Buffer,
+    sky_and_sun_lighting_params: wgpu::Buffer,
 
     pub parameters: AtmosphereParams,
 }
@@ -76,12 +76,13 @@ impl Atmosphere {
         pipeline_manager: &mut PipelineManager,
         primary_depth_buffer: &PrimaryDepthBuffer,
     ) -> Result<Self, PipelineError> {
-        let sh_coefficients_buffer_size = (1 + 3 + 5) * // SH bands 0, 1, 2
+        let sh_coefficients_buffer_size = (1 + 3 + 5 // SH bands 0, 1, 2
+            + 1) * // Sun illuminance.
             (std::mem::size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
-        let sh_coefficients = device.create_buffer(&wgpu::BufferDescriptor {
+        let sky_and_sun_lighting_params = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SH coefficients"),
             size: sh_coefficients_buffer_size,
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM,
             mapped_at_creation: false,
         });
 
@@ -136,9 +137,9 @@ impl Atmosphere {
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 })
-                // [in] sh coefficients (debugging only)
+                // [in] sun color + sh coefficients
                 .next_binding_fragment(wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: NonZeroU64::new(sh_coefficients_buffer_size),
                 })
@@ -195,7 +196,7 @@ impl Atmosphere {
             &raymarch_bindgroup_layout,
             &transmittance_lut,
             primary_depth_buffer,
-            &sh_coefficients,
+            &sky_and_sun_lighting_params,
         );
 
         // Compute pipeline for computing SH coefficients.
@@ -221,7 +222,7 @@ impl Atmosphere {
                     has_dynamic_offset: false,
                     min_binding_size: NonZeroU64::new(sampling_directions_buffer.size()),
                 })
-                // [out] sh coefficients
+                // [out] sun color + sh coefficients
                 .next_binding_compute(wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
@@ -253,7 +254,7 @@ impl Atmosphere {
             let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
                 .texture(&transmittance_lut)
                 .buffer(sampling_directions_buffer.as_entire_buffer_binding())
-                .buffer(sh_coefficients.as_entire_buffer_binding())
+                .buffer(sky_and_sun_lighting_params.as_entire_buffer_binding())
                 .create(device, "atmosphere/compute_sh");
 
             (pipeline, compute_sh_bind_group)
@@ -266,7 +267,7 @@ impl Atmosphere {
             raymarch_bindgroup_layout,
             raymarch_bindgroup,
             compute_sh_bind_group,
-            sh_coefficients,
+            sky_and_sun_lighting_params,
             transmittance_lut,
             parameters: AtmosphereParams::default(),
         })
@@ -292,7 +293,7 @@ impl Atmosphere {
             &self.raymarch_bindgroup_layout,
             &self.transmittance_lut,
             primary_depth_buffer,
-            &self.sh_coefficients,
+            &self.sky_and_sun_lighting_params,
         );
     }
 

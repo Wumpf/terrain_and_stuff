@@ -14,11 +14,12 @@ enable dual_source_blending;
     sun_disk_illuminance_factor,
 }
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
+#import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
 
 
 @group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
 @group(1) @binding(1) var screen_depth: texture_2d<f32>;
-@group(1) @binding(2) var<storage, read> sh_coefficients: array<vec3f, 9>; // For debugging only.
+@group(1) @binding(2) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 
 const NumScatteringSteps: f32 = 64.0;
 
@@ -27,13 +28,13 @@ struct FragmentResult {
     @location(0) @blend_src(1) transmittance : vec4f,
 }
 
-fn sun_disk_luminance(camera_ray: Ray, dir_to_sun: vec3f, transmittance: vec3f) -> vec3f {
+fn sun_disk_luminance(camera_ray: Ray, dir_to_sun: vec3f) -> vec3f {
     let sun = dot(camera_ray.direction, dir_to_sun) - cos(sun_disk_diameteter_rad);
     // Since the sun is so bright, this isn't giving us enough antialiasing yet.
     //let antialiased_sun = saturate(sun / (fwidth(sun) * 100.0));
     // Fudging this with a looks good enough.
-    let antialiased_sun = saturate(sun / (fwidth(sun) * 1000.0));
-    return sun_disk_illuminance_factor * transmittance * antialiased_sun;
+    let antialiased_sun = saturate(sun / (fwidth(sun) * 100.0));
+    return sun_disk_illuminance_factor * sky_and_sun_lighting_params.sun_illuminance * antialiased_sun;
 }
 
 @fragment
@@ -56,7 +57,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
         frame_uniforms.dir_to_sun,
         geometry_distance_on_camera_ray
     );
-    result.scattering += sun_disk_luminance(camera_ray, frame_uniforms.dir_to_sun, result.transmittance);
+    result.scattering += sun_disk_luminance(camera_ray, frame_uniforms.dir_to_sun);
 
     let fragment_result = FragmentResult(vec4f(result.scattering, 1.0), vec4f(result.transmittance, 1.0));
 
@@ -70,7 +71,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     }
     // Show the SH compressed sky.
     if false && depth_buffer_depth == 0.0 {
-        let sh_luminance = evaluate_sh2(camera_ray.direction, sh_coefficients);
+        let sh_luminance = evaluate_sh2(camera_ray.direction, sky_and_sun_lighting_params.sky_luminance_sh_coefficients);
         return FragmentResult(vec4f(sh_luminance, 1.0), vec4f(0.0));
     }
 
