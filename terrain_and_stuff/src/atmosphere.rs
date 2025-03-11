@@ -76,6 +76,15 @@ impl Atmosphere {
         pipeline_manager: &mut PipelineManager,
         primary_depth_buffer: &PrimaryDepthBuffer,
     ) -> Result<Self, PipelineError> {
+        let sh_coefficients_buffer_size = (1 + 3 + 5) * // SH bands 0, 1, 2
+            (std::mem::size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
+        let sh_coefficients = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("SH coefficients"),
+            size: sh_coefficients_buffer_size,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
         // Transmittance.
         let (transmittance_lut, render_pipe_transmittance_lut, raymarch_bindgroup_layout) = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -115,15 +124,23 @@ impl Atmosphere {
             )?;
 
             let raymarch_bindings = BindGroupLayoutBuilder::new()
+                // [in] transmittance lut
                 .next_binding_fragment(wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 })
+                // [in] depth buffer
                 .next_binding_fragment(wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
+                })
+                // [in] sh coefficients (debugging only)
+                .next_binding_fragment(wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(sh_coefficients_buffer_size),
                 })
                 .create(device, "atmosphere/render_atmosphere");
 
@@ -178,16 +195,8 @@ impl Atmosphere {
             &raymarch_bindgroup_layout,
             &transmittance_lut,
             primary_depth_buffer,
+            &sh_coefficients,
         );
-
-        let sh_coefficients_buffer_size = (1 + 3 + 5) * // SH bands 0, 1, 2
-            (std::mem::size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
-        let sh_coefficients = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SH coefficients"),
-            size: sh_coefficients_buffer_size,
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
 
         // Compute pipeline for computing SH coefficients.
         let (compute_pipe_sh, compute_sh_bind_group) = {
@@ -268,10 +277,12 @@ impl Atmosphere {
         raymarch_bindings: &BindGroupLayoutWithDesc,
         transmittance_lut: &wgpu::TextureView,
         primary_depth_buffer: &PrimaryDepthBuffer,
+        sh_coefficients: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         BindGroupBuilder::new(raymarch_bindings)
             .texture(transmittance_lut)
             .texture(primary_depth_buffer.view())
+            .buffer(sh_coefficients.as_entire_buffer_binding())
             .create(device, "atmosphere/render_atmosphere")
     }
 
@@ -281,6 +292,7 @@ impl Atmosphere {
             &self.raymarch_bindgroup_layout,
             &self.transmittance_lut,
             primary_depth_buffer,
+            &self.sh_coefficients,
         );
     }
 

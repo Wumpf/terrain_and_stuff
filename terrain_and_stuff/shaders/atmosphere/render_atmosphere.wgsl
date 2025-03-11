@@ -6,6 +6,7 @@ enable dual_source_blending;
 #import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
 #import "global_bindings.wgsl"::{frame_uniforms}
 #import "intersections.wgsl"::{Ray}
+#import "sh.wgsl"::{evaluate_sh2} // For debugging only.
 
 #import "atmosphere/constants.wgsl"::{
     ground_radius_km,
@@ -17,6 +18,7 @@ enable dual_source_blending;
 
 @group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
 @group(1) @binding(1) var screen_depth: texture_2d<f32>;
+@group(1) @binding(2) var<storage, read> sh_coefficients: array<vec3f, 9>; // For debugging only.
 
 const NumScatteringSteps: f32 = 64.0;
 
@@ -66,15 +68,20 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
         debug_result.scattering *= vec4f(0.0);
         return debug_result;
     }
+    // Show the SH compressed sky.
+    if false && depth_buffer_depth == 0.0 {
+        let sh_luminance = evaluate_sh2(camera_ray.direction, sh_coefficients);
+        return FragmentResult(vec4f(sh_luminance, 1.0), vec4f(0.0));
+    }
 
     return fragment_result;
 
     // Debug stuff:
-    //return ScatteringResult(vec4f(fract(max_marching_distance_km * 0.1)), vec4f(0.0));
+    //return FragmentResult(vec4f(fract(max_marching_distance_km * 0.1)), vec4f(0.0));
 
     //let world_space_position = (view_space_position * frame_uniforms.view_from_world).xyz + frame_uniforms.camera_position;
-    //return ScatteringResult(vec4f(fract(abs(world_space_position) * 0.0001), 1.0), vec4f(0.0));
+    //return FragmentResult(vec4f(fract(abs(world_space_position) * 0.0001), 1.0), vec4f(0.0));
 
     //let trasmittance_lut = textureSample(transmittance_lut, trilinear_sampler_clamp, texcoord);
-    //return ScatteringResult(trasmittance_lut, vec4f(0.0));
+    //return FragmentResult(trasmittance_lut, vec4f(0.0));
 }
