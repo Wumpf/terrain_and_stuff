@@ -3,7 +3,7 @@
 //!
 //! This is especially important for cases where [`glam`] isn't explicit about padding and alignment.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{CheckedBitPattern, Pod, Zeroable};
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Zeroable, Pod)]
@@ -320,4 +320,39 @@ impl From<glam::Affine3A> for Mat4x3 {
 #[derive(Clone, Copy, Zeroable, Pod, Default)]
 pub struct PaddingRow {
     p: [f32; 4],
+}
+
+/// A wrapper around an enum that is always stored as a u32 for consumption in wgsl.
+#[derive(Clone, Copy, Zeroable)]
+#[repr(transparent)]
+pub struct WgslEnum<T>
+where
+    T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static,
+{
+    value: u32,
+    _marker: std::marker::PhantomData<T>,
+}
+
+// Bytemuck doesn't allow deriving Pod if any of the generics parameters are not Pod.
+// https://github.com/Lokathor/bytemuck/issues/191
+unsafe impl<T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static> bytemuck::Pod
+    for WgslEnum<T>
+{
+}
+
+impl<T: Copy + Into<u32> + CheckedBitPattern + Zeroable> WgslEnum<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            value: value.into(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn set(&mut self, value: T) {
+        self.value = value.into();
+    }
+
+    pub fn get(&self) -> T {
+        bytemuck::checked::try_cast(self.value).unwrap()
+    }
 }

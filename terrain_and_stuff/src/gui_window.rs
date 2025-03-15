@@ -1,11 +1,15 @@
+use bytemuck::Contiguous as _;
 use egui::Widget;
 
-use crate::{atmosphere::AtmosphereParams, camera::Camera};
+use crate::{
+    atmosphere::{Atmosphere, AtmosphereDebugDrawMode},
+    camera::Camera,
+};
 
 pub fn run_gui(
     egui_ctx: &egui::Context,
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
-    atmosphere: &mut AtmosphereParams,
+    atmosphere: &mut Atmosphere,
     camera: &mut Camera,
     uses_cursor: &mut bool,
 ) {
@@ -14,12 +18,28 @@ pub fn run_gui(
             .default_open(true)
             .show(ui, |ui| {
                 egui::Grid::new("atmosphere_grid").show(ui, |ui| {
-                    ui.label("Sun azimuth: ");
+                    ui.label("Sun azimuth:");
                     ui.drag_angle(&mut atmosphere.sun_azimuth);
                     ui.end_row();
 
-                    ui.label("Sun altitude: ");
+                    ui.label("Sun altitude:");
                     ui.drag_angle(&mut atmosphere.sun_altitude);
+                    ui.end_row();
+
+                    let mut draw_mode = atmosphere.parameters.draw_mode.get();
+                    ui.label("Debug draw mode:");
+                    egui::ComboBox::from_id_salt("atmosphere_debug_draw_mode")
+                        .selected_text(format!("{:?}", draw_mode))
+                        .show_ui(ui, |ui| {
+                            for variant_val in AtmosphereDebugDrawMode::MIN_VALUE
+                                ..=AtmosphereDebugDrawMode::MAX_VALUE
+                            {
+                                let variant =
+                                    AtmosphereDebugDrawMode::from_integer(variant_val).unwrap();
+                                ui.selectable_value(&mut draw_mode, variant, variant.to_string());
+                            }
+                        });
+                    atmosphere.parameters.draw_mode.set(draw_mode);
                     ui.end_row();
                 });
             });

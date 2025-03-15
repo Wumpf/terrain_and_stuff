@@ -12,36 +12,56 @@ use crate::{
     },
     wgpu_utils::{
         BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc,
-        wgpu_buffer_types::Vec3RowPadded,
+        wgpu_buffer_types::{Vec3RowPadded, WgslEnum},
     },
 };
 
-#[derive(Debug)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    bytemuck::Zeroable,
+    bytemuck::CheckedBitPattern,
+    bytemuck::Contiguous,
+)]
+#[repr(u32)]
+pub enum AtmosphereDebugDrawMode {
+    None = 0,
+    Sh = 1,
+    NoScatteringOverlay = 2,
+}
+
+impl std::fmt::Display for AtmosphereDebugDrawMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AtmosphereDebugDrawMode::None => write!(f, "None"),
+            AtmosphereDebugDrawMode::Sh => write!(f, "Spherical harmonics"),
+            AtmosphereDebugDrawMode::NoScatteringOverlay => write!(f, "No scattering overlay"),
+        }
+    }
+}
+
+impl From<AtmosphereDebugDrawMode> for u32 {
+    fn from(value: AtmosphereDebugDrawMode) -> Self {
+        value as u32
+    }
+}
+
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+#[repr(C)]
 pub struct AtmosphereParams {
-    /// Sun's azimuth angle in radians.
-    pub sun_azimuth: f32,
-    /// Sun's altitude angle in radians.
-    pub sun_altitude: f32,
+    pub draw_mode: WgslEnum<AtmosphereDebugDrawMode>,
+    _padding: [f32; 3 + 16],
 }
 
 impl Default for AtmosphereParams {
     fn default() -> Self {
         Self {
-            sun_azimuth: std::f32::consts::PI,
-            sun_altitude: std::f32::consts::PI / 4.0,
+            draw_mode: WgslEnum::<AtmosphereDebugDrawMode>::new(AtmosphereDebugDrawMode::None),
+            _padding: [0.0; 3 + 16],
         }
-    }
-}
-
-impl AtmosphereParams {
-    pub fn dir_to_sun(&self) -> glam::Vec3 {
-        let (sin_altitude, cos_altitude) = self.sun_altitude.sin_cos();
-        let (sin_azimuth, cos_azimuth) = self.sun_azimuth.sin_cos();
-        glam::vec3(
-            cos_altitude * cos_azimuth,
-            sin_altitude,
-            cos_altitude * sin_azimuth,
-        )
     }
 }
 
@@ -51,14 +71,26 @@ pub struct Atmosphere {
 
     compute_pipe_sh: ComputePipelineHandle,
 
-    raymarch_bindgroup_layout: BindGroupLayoutWithDesc,
-    raymarch_bindgroup: wgpu::BindGroup,
+    render_atmosphere_bindgroup_main: wgpu::BindGroup,
+    render_atmosphere_bindings_screen_dependent: BindGroupLayoutWithDesc,
+    render_atmosphere_bindgroup_screen_dependent: wgpu::BindGroup,
+
     compute_sh_bind_group: wgpu::BindGroup,
 
     transmittance_lut: wgpu::TextureView,
+    atmosphere_params_buffer: wgpu::Buffer,
     sky_and_sun_lighting_params_buffer: wgpu::Buffer,
 
+    /// Parameters for the atmosphere other than light direction.
+    ///
+    /// GPU uploaded every frame for simplicity.
+    /// (small structs like this don't make a dent perf wise 🤷)
     pub parameters: AtmosphereParams,
+
+    /// Sun's azimuth angle in radians.
+    pub sun_azimuth: f32,
+    /// Sun's altitude angle in radians.
+    pub sun_altitude: f32,
 }
 
 const TRANSMITTANCE_LUT_SIZE: wgpu::Extent3d = wgpu::Extent3d {
@@ -87,7 +119,7 @@ impl Atmosphere {
         });
 
         // Transmittance.
-        let (transmittance_lut, render_pipe_transmittance_lut, raymarch_bindgroup_layout) = {
+        let (transmittance_lut, render_pipe_transmittance_lut) = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("EmptyLayout"),
                 bind_group_layouts: &[],
@@ -124,48 +156,69 @@ impl Atmosphere {
                 },
             )?;
 
-            let raymarch_bindings = BindGroupLayoutBuilder::new()
-                // [in] transmittance lut
-                .next_binding_fragment(wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                })
-                // [in] depth buffer
-                .next_binding_fragment(wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                })
-                // [in] sun color + sh coefficients
-                .next_binding_fragment(wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(sh_coefficients_buffer_size),
-                })
-                .create(device, "atmosphere/render_atmosphere");
-
-            (
-                transmittance_lut,
-                render_pipe_transmittance_lut,
-                raymarch_bindings,
-            )
+            (transmittance_lut, render_pipe_transmittance_lut)
         };
+
+        let atmosphere_params = AtmosphereParams::default();
+        let atmosphere_params_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Atmosphere params"),
+                contents: bytemuck::bytes_of(&atmosphere_params),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let render_atmosphere_bindings_main = BindGroupLayoutBuilder::new()
+            // [in] atmosphere params
+            .next_binding_fragment(wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: NonZeroU64::new(atmosphere_params_buffer.size()),
+            })
+            // [in] transmittance lut
+            .next_binding_fragment(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            })
+            // [in] sun color + sh coefficients
+            .next_binding_fragment(wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: NonZeroU64::new(sh_coefficients_buffer_size),
+            })
+            .create(device, "render_atmosphere_main");
+
+        let render_atmosphere_bindgroup_main =
+            BindGroupBuilder::new(&render_atmosphere_bindings_main)
+                .buffer(atmosphere_params_buffer.as_entire_buffer_binding())
+                .texture(&transmittance_lut)
+                .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
+                .create(device, "render_atmosphere_main");
+
+        let render_atmosphere_bindings_screen_dependent = BindGroupLayoutBuilder::new()
+            // [in] depth buffer
+            .next_binding_fragment(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            })
+            .create(device, "render_atmosphere_screen_dependent");
 
         // Render atmosphere.
         let render_pipe_render_atmosphere = {
             let raymarch_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("RaymarchLayout"),
+                label: Some("render_atmosphere"),
                 bind_group_layouts: &[
                     &global_bindings.bind_group_layout.layout,
-                    &raymarch_bindgroup_layout.layout,
+                    &render_atmosphere_bindings_main.layout,
+                    &render_atmosphere_bindings_screen_dependent.layout,
                 ],
                 push_constant_ranges: &[],
             });
             pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
-                    debug_label: "atmosphere/render_atmosphere".to_owned(),
+                    debug_label: "render_atmosphere".to_owned(),
                     layout: raymarch_layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
                     fragment_shader: ShaderEntryPoint::first_in(
@@ -191,13 +244,12 @@ impl Atmosphere {
                 },
             )?
         };
-        let raymarch_bindgroup = Self::create_raymarch_bindgroup(
-            device,
-            &raymarch_bindgroup_layout,
-            &transmittance_lut,
-            primary_depth_buffer,
-            &sky_and_sun_lighting_params_buffer,
-        );
+        let render_atmosphere_bindgroup_screen_dependent =
+            Self::create_render_atmosphere_bindgroup_screen_dependent(
+                device,
+                &render_atmosphere_bindings_screen_dependent,
+                primary_depth_buffer,
+            );
 
         // Compute pipeline for computing SH coefficients.
         let (compute_pipe_sh, compute_sh_bind_group) = {
@@ -264,49 +316,66 @@ impl Atmosphere {
             render_pipe_transmittance_lut,
             render_pipe_render_atmosphere,
             compute_pipe_sh,
-            raymarch_bindgroup_layout,
-            raymarch_bindgroup,
+            render_atmosphere_bindgroup_main,
+            render_atmosphere_bindings_screen_dependent,
+            render_atmosphere_bindgroup_screen_dependent,
             compute_sh_bind_group,
             sky_and_sun_lighting_params_buffer,
             transmittance_lut,
+            atmosphere_params_buffer,
+
             parameters: AtmosphereParams::default(),
+            sun_azimuth: std::f32::consts::PI,
+            sun_altitude: std::f32::consts::PI / 4.0,
         })
     }
 
-    fn create_raymarch_bindgroup(
+    fn create_render_atmosphere_bindgroup_screen_dependent(
         device: &wgpu::Device,
-        raymarch_bindings: &BindGroupLayoutWithDesc,
-        transmittance_lut: &wgpu::TextureView,
+        render_atmosphere_bindings_screen_dependent: &BindGroupLayoutWithDesc,
         primary_depth_buffer: &PrimaryDepthBuffer,
-        sh_coefficients: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
-        BindGroupBuilder::new(raymarch_bindings)
-            .texture(transmittance_lut)
+        BindGroupBuilder::new(render_atmosphere_bindings_screen_dependent)
             .texture(primary_depth_buffer.view())
-            .buffer(sh_coefficients.as_entire_buffer_binding())
-            .create(device, "atmosphere/render_atmosphere")
+            .create(device, "render_atmosphere_screen_dependent")
     }
 
     pub fn on_resize(&mut self, device: &wgpu::Device, primary_depth_buffer: &PrimaryDepthBuffer) {
-        self.raymarch_bindgroup = Self::create_raymarch_bindgroup(
-            device,
-            &self.raymarch_bindgroup_layout,
-            &self.transmittance_lut,
-            primary_depth_buffer,
-            &self.sky_and_sun_lighting_params_buffer,
-        );
+        self.render_atmosphere_bindgroup_screen_dependent =
+            Self::create_render_atmosphere_bindgroup_screen_dependent(
+                device,
+                &self.render_atmosphere_bindings_screen_dependent,
+                primary_depth_buffer,
+            );
     }
 
     pub fn sun_and_sky_lighting_params_buffer(&self) -> &wgpu::Buffer {
         &self.sky_and_sun_lighting_params_buffer
     }
 
+    pub fn dir_to_sun(&self) -> glam::Vec3 {
+        let (sin_altitude, cos_altitude) = self.sun_altitude.sin_cos();
+        let (sin_azimuth, cos_azimuth) = self.sun_azimuth.sin_cos();
+        glam::vec3(
+            cos_altitude * cos_azimuth,
+            sin_altitude,
+            cos_altitude * sin_azimuth,
+        )
+    }
+
     pub fn prepare(
         &self,
+        queue: &wgpu::Queue,
         encoder: &mut EncoderScope<'_>,
         pipeline_manager: &PipelineManager,
         global_bindings: &GlobalBindings,
     ) -> Result<(), PipelineError> {
+        queue.write_buffer(
+            &self.atmosphere_params_buffer,
+            0,
+            bytemuck::bytes_of(&self.parameters),
+        );
+
         let mut encoder = encoder.scope("Prepare atmosphere");
         {
             let mut compute_pass = encoder.scoped_compute_pass("SH coefficients");
@@ -351,7 +420,8 @@ impl Atmosphere {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_render_atmosphere)?;
 
         rpass.push_debug_group("Raymarch Atmosphere");
-        rpass.set_bind_group(1, &self.raymarch_bindgroup, &[]);
+        rpass.set_bind_group(1, &self.render_atmosphere_bindgroup_main, &[]);
+        rpass.set_bind_group(2, &self.render_atmosphere_bindgroup_screen_dependent, &[]);
         rpass.set_pipeline(pipeline);
         rpass.draw(0..3, 0..1);
         rpass.pop_debug_group();

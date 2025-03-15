@@ -17,9 +17,20 @@ enable dual_source_blending;
 #import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
 
 
-@group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
-@group(1) @binding(1) var screen_depth: texture_2d<f32>;
+// See atmosphere.rs#AtmosphereDebugDrawMode
+const AtmosphereDebugDrawMode_None: u32 = 0;
+const AtmosphereDebugDrawMode_Sh: u32 = 1;
+const AtmosphereDebugDrawMode_NoScatteringOverlay: u32 = 2;
+
+struct AtmosphereParams {
+    debug_draw_mode: u32,
+}
+
+@group(1) @binding(0) var<uniform> atmosphere_params: AtmosphereParams;
+@group(1) @binding(1) var transmittance_lut: texture_2d<f32>;
 @group(1) @binding(2) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;
+
+@group(2) @binding(0) var screen_depth: texture_2d<f32>;
 
 const NumScatteringSteps: f32 = 64.0;
 
@@ -62,17 +73,32 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let fragment_result = FragmentResult(vec4f(result.scattering, 1.0), vec4f(result.transmittance, 1.0));
 
     // DEBUG:
-    // Disable sky wherever there's something in the depth buffer for debugging the effect of the atmosphere on the landscape.
-    if false && depth_buffer_depth != 0.0 {
-        var debug_result = fragment_result;
-        debug_result.transmittance = vec4f(1.0);
-        debug_result.scattering *= vec4f(0.0);
-        return debug_result;
-    }
-    // Show the SH compressed sky.
-    if false && depth_buffer_depth == 0.0 {
-        let sh_luminance = evaluate_sh2(camera_ray.direction, sky_and_sun_lighting_params.sky_luminance_sh_coefficients);
-        return FragmentResult(vec4f(sh_luminance, 1.0), vec4f(0.0));
+    switch (atmosphere_params.debug_draw_mode) {
+        // case AtmosphereDebugDrawMode_None: {
+        //     break;
+        // }
+
+        case AtmosphereDebugDrawMode_Sh: {
+            if depth_buffer_depth == 0.0 {
+                let sh_luminance = evaluate_sh2(camera_ray.direction, sky_and_sun_lighting_params.sky_luminance_sh_coefficients);
+                return FragmentResult(vec4f(sh_luminance, 1.0), vec4f(0.0));
+            }
+            break;
+        }
+
+        case AtmosphereDebugDrawMode_NoScatteringOverlay: {
+            if depth_buffer_depth != 0.0 {
+                var debug_result = fragment_result;
+                debug_result.transmittance = vec4f(1.0);
+                debug_result.scattering *= vec4f(0.0);
+                return debug_result;
+            }
+            break;
+        }
+
+        default: {
+            break;
+        }
     }
 
     return fragment_result;

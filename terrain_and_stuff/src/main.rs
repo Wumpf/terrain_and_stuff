@@ -287,7 +287,7 @@ impl Application<'_> {
             gui_window::run_gui(
                 egui_ctx,
                 &self.last_gpu_profiler_results,
-                &mut self.atmosphere.parameters,
+                &mut self.atmosphere,
                 &mut self.camera,
                 &mut mouse_does_ui_interaction,
             );
@@ -320,7 +320,7 @@ impl Application<'_> {
                 camera_position: self.camera.position.into(),
                 camera_forward: self.camera.forward().into(),
                 tan_half_fov: self.camera.tan_half_fov(aspect_ratio).into(),
-                dir_to_sun: self.atmosphere.parameters.dir_to_sun().into(),
+                dir_to_sun: self.atmosphere.dir_to_sun().into(),
             },
         );
 
@@ -407,7 +407,12 @@ impl Application<'_> {
 
     fn draw_scene(&self, encoder: &mut EncoderScope<'_>) {
         self.atmosphere
-            .prepare(encoder, &self.pipeline_manager, &self.global_bindings)
+            .prepare(
+                &self.queue,
+                encoder,
+                &self.pipeline_manager,
+                &self.global_bindings,
+            )
             .ok_or_log("prepare sky");
 
         {
