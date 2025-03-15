@@ -35,9 +35,9 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
 
     // In an optimal implementation, we'd do special handling once we're down to the size of the subgroup (aka warp).
     // Practically, subgroup sizes depend too much on GPU details.
-    for (var i = NUM_SAMPLES / 2; i > 1; i /= 2) {
+    for (var i = NUM_SAMPLES / 2; i >= 1; i /= 2) {
         if (sample_index < i) {
-            shared_buffer[sample_index] = shared_buffer[sample_index] + shared_buffer[sample_index + i];
+            shared_buffer[sample_index] += shared_buffer[sample_index + i];
         }
         workgroupBarrier();
     }
