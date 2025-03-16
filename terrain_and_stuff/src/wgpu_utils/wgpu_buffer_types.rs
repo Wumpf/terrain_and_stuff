@@ -155,6 +155,13 @@ pub struct Vec3RowPadded {
     pub padding: f32,
 }
 
+impl From<Vec3RowPadded> for glam::Vec3 {
+    #[inline]
+    fn from(v: Vec3RowPadded) -> Self {
+        glam::vec3(v.x, v.y, v.z)
+    }
+}
+
 impl From<glam::Vec3> for Vec3RowPadded {
     #[inline]
     fn from(v: glam::Vec3) -> Self {

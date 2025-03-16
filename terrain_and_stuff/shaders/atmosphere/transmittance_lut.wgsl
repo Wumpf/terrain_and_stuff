@@ -7,13 +7,9 @@
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, ScatteringValues}
-#import "atmosphere/constants.wgsl"::{
-    ground_radius_km,
-    atmosphere_radius_km,
-}
+#import "atmosphere/params.wgsl"::{atmosphere_params}
 
 const SunTransmittanceSteps: f32 = 40.0;
-
 
 // This is not the parameterization described in http://www.klayge.org/material/4_0/Atmospheric/Precomputed%20Atmospheric%20Scattering.pdf (section 4)
 // (and also implemented by https://github.com/JolifantoBambla/webgpu-sky-atmosphere/blob/main/src/shaders/render_transmittance_lut.wgsl)
@@ -22,7 +18,8 @@ const SunTransmittanceSteps: f32 = 40.0;
 fn ray_to_sun_texcoord(texcoord: vec2f) -> Ray {
     let sun_cos_theta = pow(2.0 * texcoord.x - 1.0, 5.0); // pow(x, 5.0) for more precision in the middle.
     let sun_theta = acos(sun_cos_theta);
-    let height_km = mix(ground_radius_km, atmosphere_radius_km, texcoord.y * texcoord.y); // square for more precision low altitudes
+    let height_km = mix(atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km,
+                        texcoord.y * texcoord.y); // square for more precision low altitudes
     let planet_relative_pos = vec3f(0.0, height_km, 0.0);
     let dir_to_sun = normalize(vec3f(0.0, sun_cos_theta, -sin(sun_theta)));
 
@@ -33,7 +30,7 @@ fn ray_to_sun_texcoord(texcoord: vec2f) -> Ray {
 fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
     let ray_to_sun = ray_to_sun_texcoord(texcoord);
 
-    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun, atmosphere_radius_km);
+    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun, atmosphere_params.atmosphere_radius_km);
     if atmosphere_distance_km < 0.0 {
         // This should never happen, we're always inside the sphere!
         return ERROR_RGBA;
@@ -47,7 +44,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
         let dt = t_new - t;
         t = t_new;
 
-        let scattering = scattering_values_for(length(ray_to_sun.origin + t * ray_to_sun.direction) - ground_radius_km);
+        let scattering = scattering_values_for(length(ray_to_sun.origin + t * ray_to_sun.direction) - atmosphere_params.ground_radius_km);
         transmittance += dt * scattering.total_extinction;
     }
     transmittance = exp(-transmittance);

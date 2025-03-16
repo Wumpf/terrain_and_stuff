@@ -14,7 +14,7 @@
     sh_weight_2p2,
 }
 
-#import "atmosphere/constants.wgsl"::{ground_radius_km, sun_illuminance}
+#import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 #import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
 
@@ -23,9 +23,9 @@
 const NUM_SAMPLES: u32 = 1024;
 const SAMPLE_NORMALIZATION_FACTOR: f32 = (1.0 / f32(NUM_SAMPLES)) * (2.0 * TAU); // Normalize by the number of samples and the sphere's surface area.
 
-@group(1) @binding(0) var transmittance_lut: texture_2d<f32>;
-@group(1) @binding(1) var<storage, read> sampling_directions: array<vec3f>;
-@group(1) @binding(2) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
+@group(2) @binding(0) var transmittance_lut: texture_2d<f32>;
+@group(2) @binding(1) var<storage, read> sampling_directions: array<vec3f>;
+@group(2) @binding(2) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 
 var<workgroup> shared_buffer: array<vec3f, NUM_SAMPLES>;
 
@@ -52,7 +52,7 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     let sample_index = id.x;
     let direction = sampling_directions[sample_index];
 
-    let planet_relative_position_km = vec3f(0.0, ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
+    let planet_relative_position_km = vec3f(0.0, atmosphere_params.ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
     let max_marching_distance_km = 999999999999.0;
 
     var sample_raymarch_result = raymarch_scattering(
@@ -92,6 +92,6 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
 
         // For Sky color we're in-scattered light, but when we're looking directly into the sun,
         // what we're seeing is the sun light itself transmitted through the atmosphere, which is why we have to use transmittance here.
-        sky_and_sun_lighting_params.sun_illuminance = sun_raymarch_result.transmittance * sun_illuminance;
+        sky_and_sun_lighting_params.sun_illuminance = sun_raymarch_result.transmittance * atmosphere_params.sun_illuminance;
     }
 }

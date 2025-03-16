@@ -1,13 +1,5 @@
 #import "constants.wgsl"::{TAU}
-#import "atmosphere/constants.wgsl"::{
-    ground_radius_km,
-    rayleigh_scale_height,
-    rayleigh_scattering_per_km_density,
-    mie_scale_height,
-    mie_scattering_per_km_density,
-    mie_absorption_per_km_density,
-    ozone_absorption_per_km_density
-}
+#import "atmosphere/params.wgsl"::{atmosphere_params}
 
 struct ScatteringValues {
     rayleigh: vec3f,
@@ -22,18 +14,18 @@ fn scattering_values_for(altitude_km: f32) -> ScatteringValues {
     // - larger particles: Mie scattering & absorption
     // - absorption effect of ozone
 
-    let rayleigh_density = exp(-altitude_km / rayleigh_scale_height);
-    let mie_density = exp(-altitude_km / mie_scale_height);
+    let rayleigh_density = exp(-altitude_km / atmosphere_params.rayleigh_scale_height);
+    let mie_density = exp(-altitude_km / atmosphere_params.mie_scale_height);
     let ozone_density = max(0.0, 1.0 - abs(altitude_km - 25.0) / 15.0);
 
     var scattering: ScatteringValues;
-    scattering.rayleigh = rayleigh_scattering_per_km_density * rayleigh_density;
-    scattering.mie = mie_scattering_per_km_density * mie_density;
+    scattering.rayleigh = atmosphere_params.rayleigh_scattering_per_km_density * rayleigh_density;
+    scattering.mie = atmosphere_params.mie_scattering_per_km_density * mie_density;
     // Ozone has no scattering contribution.
     let total_scattering = scattering.rayleigh + scattering.mie;
 
-    let mie_absorption = mie_absorption_per_km_density * mie_density;
-    let ozone_absorption = ozone_absorption_per_km_density * ozone_density;
+    let mie_absorption = atmosphere_params.mie_absorption_per_km_density * mie_density;
+    let ozone_absorption = atmosphere_params.ozone_absorption_per_km_density * ozone_density;
     // Rayleigh has no absorption contribution.
     let total_absorption = mie_absorption + ozone_absorption;
 

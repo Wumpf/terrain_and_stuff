@@ -20,8 +20,8 @@
 #import "global_bindings.wgsl"::{trilinear_sampler_clamp}
 #import "intersections.wgsl"::{Ray, ray_sphere_intersect}
 
+#import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
-#import "atmosphere/constants.wgsl"::{ground_radius_km, atmosphere_radius_km, sun_illuminance}
 
 const NumScatteringSteps: f32 = 64.0;
 
@@ -35,7 +35,7 @@ fn sample_transmittance_lut(transmittance_lut: texture_2d<f32>, altitude_km: f32
     // u coordinate is mapped to the cos(zenith angle)
     // v coordinate is mapped to the altitude from ground top atmosphere top.
     let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
-    let relative_altitude = sqrt(altitude_km / (atmosphere_radius_km - ground_radius_km));
+    let relative_altitude = sqrt(altitude_km / (atmosphere_params.atmosphere_radius_km - atmosphere_params.ground_radius_km));
     let texcoord = vec2f(pow(sun_cos_zenith_angle, 1.0/5.0) * 0.5 + 0.5, relative_altitude);
 
     return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
@@ -45,8 +45,8 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, pla
     // Figure out where the ray hits either the planet or the atmosphere end.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
     let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
-    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_radius_km);
-    let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, ground_radius_km);
+    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.atmosphere_radius_km);
+    let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.ground_radius_km);
     let atmosphere_or_ground_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
     let max_marching_distance_km = min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 
@@ -68,7 +68,9 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, pla
         t = t_new;
 
         let new_planet_relative_position_km = planet_relative_position_km + t * direction;
-        let altitude_km = clamp(length(new_planet_relative_position_km), ground_radius_km, atmosphere_radius_km) - ground_radius_km;
+        let altitude_km = clamp(length(new_planet_relative_position_km),
+                                atmosphere_params.ground_radius_km,
+                                atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
 
         let scattering = scattering_values_for(altitude_km);
         let sample_transmittance = exp(-dt * scattering.total_extinction);
@@ -88,7 +90,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, pla
         let phase_times_scattering = scattering.mie * mie_phase + scattering.rayleigh * rayleigh_phase;
         let inscattering = planet_shadow * shadow * sun_transmittance * phase_times_scattering +
                                 multiscattered_luminance * (scattering.rayleigh + scattering.mie);
-        let inscattering_luminance = sun_illuminance * inscattering;
+        let inscattering_luminance = atmosphere_params.sun_illuminance * inscattering;
 
         // Integrated scattering within path segment.
         let scattering_integral = (inscattering_luminance - inscattering_luminance * sample_transmittance) / scattering.total_extinction;

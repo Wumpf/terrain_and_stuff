@@ -53,14 +53,72 @@ impl From<AtmosphereDebugDrawMode> for u32 {
 #[repr(C)]
 pub struct AtmosphereParams {
     pub draw_mode: WgslEnum<AtmosphereDebugDrawMode>,
-    _padding: [f32; 3 + 16],
+
+    // Atmosphere values for earth.
+    pub ground_radius_km: f32,
+    pub atmosphere_radius_km: f32,
+
+    pub rayleigh_scale_height: f32,
+    // -- row boundary --
+    pub rayleigh_scattering_per_km_density: glam::Vec3,
+
+    pub mie_scale_height: f32,
+    // -- row boundary --
+    pub mie_scattering_per_km_density: f32,
+    pub mie_absorption_per_km_density: f32,
+
+    // Sun's angle is 0.5 degrees according to this.
+    // https://www.nasa.gov/wp-content/uploads/2015/01/YOSS_Act_9.pdf
+    //const sun_diameteter_rad = 0.5 * DEG_TO_RAD;
+    // But it doesn't look that nice:
+    // we'd need some really heavy bloom to account for the fact that this is an excrucingly bright spot.
+    // See also `sun_unscattered_luminance` below.
+    pub sun_disk_diameteter_rad: f32,
+
+    // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
+    pub sun_disk_illuminance_factor: f32,
+    // -- row boundary --
+    pub ozone_absorption_per_km_density: Vec3RowPadded,
+    // -- row boundary --
+    pub sun_illuminance: Vec3RowPadded,
+    // -- row boundary --
 }
 
 impl Default for AtmosphereParams {
     fn default() -> Self {
         Self {
             draw_mode: WgslEnum::<AtmosphereDebugDrawMode>::new(AtmosphereDebugDrawMode::None),
-            _padding: [0.0; 3 + 16],
+
+            // Atmosphere values for earth.
+            ground_radius_km: 6360.0,
+            atmosphere_radius_km: 6460.0,
+
+            rayleigh_scale_height: 8.0,
+            rayleigh_scattering_per_km_density: glam::vec3(0.005802, 0.013558, 0.033100).into(),
+
+            mie_scale_height: 1.2,
+            mie_scattering_per_km_density: 0.003996,
+            mie_absorption_per_km_density: 0.004440,
+
+            ozone_absorption_per_km_density: glam::vec3(0.000650, 0.001881, 0.000085).into(),
+
+            // Roughly the intensity Sun without any scattering
+            // https://en.wikipedia.org/wiki/Luminance
+            //const sun_unscattered_luminance: vec3f = vec3f(1.6, 1.6, 1.6) * 1000000000.0;
+            // Okay that's just too much to work with practically 🤷
+            // Instead we just use the sun as the grounding measure of things.
+            sun_illuminance: glam::vec3(1.6, 1.6, 1.6).into(),
+
+            // Sun's angle is 0.5 degrees according to this.
+            // https://www.nasa.gov/wp-content/uploads/2015/01/YOSS_Act_9.pdf
+            //const sun_diameteter_rad = 0.5 * DEG_TO_RAD;
+            // But it doesn't look that nice:
+            // we'd need some really heavy bloom to account for the fact that this is an excrucingly bright spot.
+            // See also `sun_unscattered_luminance` below.
+            sun_disk_diameteter_rad: 1.0 * std::f32::consts::TAU / 360.0,
+
+            // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
+            sun_disk_illuminance_factor: 100.0,
         }
     }
 }
@@ -70,6 +128,8 @@ pub struct Atmosphere {
     render_pipe_render_atmosphere: RenderPipelineHandle,
 
     compute_pipe_sh: ComputePipelineHandle,
+
+    atmosphere_params_bindgroup: wgpu::BindGroup,
 
     render_atmosphere_bindgroup_main: wgpu::BindGroup,
     render_atmosphere_bindings_screen_dependent: BindGroupLayoutWithDesc,
@@ -118,11 +178,36 @@ impl Atmosphere {
             mapped_at_creation: false,
         });
 
+        let atmosphere_params = AtmosphereParams::default();
+        let atmosphere_params_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Atmosphere params"),
+                contents: bytemuck::bytes_of(&atmosphere_params),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let atmosphere_params_bindings = BindGroupLayoutBuilder::new()
+            .next_binding(
+                wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
+                wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(atmosphere_params_buffer.size()),
+                },
+            )
+            .create(device, "atmosphere_params");
+        let atmosphere_params_bindgroup = BindGroupBuilder::new(&atmosphere_params_bindings)
+            .buffer(atmosphere_params_buffer.as_entire_buffer_binding())
+            .create(device, "atmosphere_params");
+
         // Transmittance.
         let (transmittance_lut, render_pipe_transmittance_lut) = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("EmptyLayout"),
-                bind_group_layouts: &[],
+                label: Some("transmittance_lut"),
+                bind_group_layouts: &[
+                    &global_bindings.bind_group_layout.layout,
+                    &atmosphere_params_bindings.layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -143,7 +228,7 @@ impl Atmosphere {
             let render_pipe_transmittance_lut = pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
-                    debug_label: "atmosphere/transmittance_lut".to_owned(),
+                    debug_label: "transmittance_lut".to_owned(),
                     layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
                     fragment_shader: ShaderEntryPoint::first_in(
@@ -159,21 +244,7 @@ impl Atmosphere {
             (transmittance_lut, render_pipe_transmittance_lut)
         };
 
-        let atmosphere_params = AtmosphereParams::default();
-        let atmosphere_params_buffer =
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Atmosphere params"),
-                contents: bytemuck::bytes_of(&atmosphere_params),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-
         let render_atmosphere_bindings_main = BindGroupLayoutBuilder::new()
-            // [in] atmosphere params
-            .next_binding_fragment(wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: NonZeroU64::new(atmosphere_params_buffer.size()),
-            })
             // [in] transmittance lut
             .next_binding_fragment(wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -190,7 +261,6 @@ impl Atmosphere {
 
         let render_atmosphere_bindgroup_main =
             BindGroupBuilder::new(&render_atmosphere_bindings_main)
-                .buffer(atmosphere_params_buffer.as_entire_buffer_binding())
                 .texture(&transmittance_lut)
                 .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
                 .create(device, "render_atmosphere_main");
@@ -210,6 +280,7 @@ impl Atmosphere {
                 label: Some("render_atmosphere"),
                 bind_group_layouts: &[
                     &global_bindings.bind_group_layout.layout,
+                    &atmosphere_params_bindings.layout,
                     &render_atmosphere_bindings_main.layout,
                     &render_atmosphere_bindings_screen_dependent.layout,
                 ],
@@ -284,7 +355,11 @@ impl Atmosphere {
 
             let compute_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute sh layout"),
-                bind_group_layouts: &[&global_bindings.bind_group_layout.layout, &bindings.layout],
+                bind_group_layouts: &[
+                    &global_bindings.bind_group_layout.layout,
+                    &atmosphere_params_bindings.layout,
+                    &bindings.layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -316,6 +391,8 @@ impl Atmosphere {
             render_pipe_transmittance_lut,
             render_pipe_render_atmosphere,
             compute_pipe_sh,
+
+            atmosphere_params_bindgroup,
             render_atmosphere_bindgroup_main,
             render_atmosphere_bindings_screen_dependent,
             render_atmosphere_bindgroup_screen_dependent,
@@ -381,7 +458,8 @@ impl Atmosphere {
             let mut compute_pass = encoder.scoped_compute_pass("SH coefficients");
             compute_pass.set_pipeline(pipeline_manager.get_compute_pipeline(self.compute_pipe_sh)?);
             compute_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
-            compute_pass.set_bind_group(1, &self.compute_sh_bind_group, &[]);
+            compute_pass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
+            compute_pass.set_bind_group(2, &self.compute_sh_bind_group, &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
         {
@@ -403,6 +481,9 @@ impl Atmosphere {
                 },
             );
 
+            render_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
+
             render_pass.set_pipeline(
                 pipeline_manager.get_render_pipeline(self.render_pipe_transmittance_lut)?,
             );
@@ -420,8 +501,9 @@ impl Atmosphere {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipe_render_atmosphere)?;
 
         rpass.push_debug_group("Raymarch Atmosphere");
-        rpass.set_bind_group(1, &self.render_atmosphere_bindgroup_main, &[]);
-        rpass.set_bind_group(2, &self.render_atmosphere_bindgroup_screen_dependent, &[]);
+        rpass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
+        rpass.set_bind_group(2, &self.render_atmosphere_bindgroup_main, &[]);
+        rpass.set_bind_group(3, &self.render_atmosphere_bindgroup_screen_dependent, &[]);
         rpass.set_pipeline(pipeline);
         rpass.draw(0..3, 0..1);
         rpass.pop_debug_group();
