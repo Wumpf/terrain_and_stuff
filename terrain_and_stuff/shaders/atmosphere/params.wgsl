@@ -1,7 +1,9 @@
 // See atmosphere.rs#AtmosphereDebugDrawMode
 const AtmosphereDebugDrawMode_None: u32 = 0;
 const AtmosphereDebugDrawMode_Sh: u32 = 1;
-const AtmosphereDebugDrawMode_NoScatteringOverlay: u32 = 2;
+const AtmosphereDebugDrawMode_NoGeometryOverlay: u32 = 2;
+const AtmosphereDebugDrawMode_TransmittanceLut: u32 = 3;
+const AtmosphereDebugDrawMode_MultipleScatteringLut: u32 = 4;
 
 struct AtmosphereParams {
     debug_draw_mode: u32,

@@ -30,7 +30,9 @@ use crate::{
 pub enum AtmosphereDebugDrawMode {
     None = 0,
     Sh = 1,
-    NoScatteringOverlay = 2,
+    NoGeometryOverlay = 2,
+    TransmittanceLut = 3,
+    MultipleScatteringLut = 4,
 }
 
 impl std::fmt::Display for AtmosphereDebugDrawMode {
@@ -38,7 +40,9 @@ impl std::fmt::Display for AtmosphereDebugDrawMode {
         match self {
             AtmosphereDebugDrawMode::None => write!(f, "None"),
             AtmosphereDebugDrawMode::Sh => write!(f, "Spherical harmonics"),
-            AtmosphereDebugDrawMode::NoScatteringOverlay => write!(f, "No scattering overlay"),
+            AtmosphereDebugDrawMode::NoGeometryOverlay => write!(f, "No geometry overlay"),
+            AtmosphereDebugDrawMode::TransmittanceLut => write!(f, "Transmittance LUT"),
+            AtmosphereDebugDrawMode::MultipleScatteringLut => write!(f, "Multiple scattering LUT"),
         }
     }
 }
@@ -124,7 +128,8 @@ impl Default for AtmosphereParams {
 }
 
 pub struct Atmosphere {
-    render_pipe_transmittance_lut: RenderPipelineHandle,
+    render_pipe_lut_transmittance: RenderPipelineHandle,
+    render_pipe_lut_multiple_scattering: RenderPipelineHandle,
     render_pipe_render_atmosphere: RenderPipelineHandle,
 
     compute_pipe_sh: ComputePipelineHandle,
@@ -137,7 +142,8 @@ pub struct Atmosphere {
 
     compute_sh_bind_group: wgpu::BindGroup,
 
-    transmittance_lut: wgpu::TextureView,
+    lut_transmittance: wgpu::TextureView,
+    lut_multiple_scattering: wgpu::TextureView,
     atmosphere_params_buffer: wgpu::Buffer,
     sky_and_sun_lighting_params_buffer: wgpu::Buffer,
 
@@ -153,8 +159,14 @@ pub struct Atmosphere {
     pub sun_altitude: f32,
 }
 
-const TRANSMITTANCE_LUT_SIZE: wgpu::Extent3d = wgpu::Extent3d {
+const LUT_TRANSMITTANCE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: 256,
+    height: 64,
+    depth_or_array_layers: 1,
+};
+
+const LUT_MULTIPLE_SCATTERING_SIZE: wgpu::Extent3d = wgpu::Extent3d {
+    width: 64,
     height: 64,
     depth_or_array_layers: 1,
 };
@@ -201,9 +213,9 @@ impl Atmosphere {
             .create(device, "atmosphere_params");
 
         // Transmittance.
-        let (transmittance_lut, render_pipe_transmittance_lut) = {
+        let (lut_transmittance, render_pipe_lut_transmittance) = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("transmittance_lut"),
+                label: Some("lut_transmittance"),
                 bind_group_layouts: &[
                     &global_bindings.bind_group_layout.layout,
                     &atmosphere_params_bindings.layout,
@@ -211,9 +223,9 @@ impl Atmosphere {
                 push_constant_ranges: &[],
             });
 
-            let transmittance_lut = device.create_texture(&wgpu::TextureDescriptor {
+            let lut_transmittance = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Transmittance LUT"),
-                size: TRANSMITTANCE_LUT_SIZE,
+                size: LUT_TRANSMITTANCE_SIZE,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -222,17 +234,17 @@ impl Atmosphere {
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             });
-            let transmittance_lut =
-                transmittance_lut.create_view(&wgpu::TextureViewDescriptor::default());
+            let lut_transmittance =
+                lut_transmittance.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let render_pipe_transmittance_lut = pipeline_manager.create_render_pipeline(
+            let render_pipe_lut_transmittance = pipeline_manager.create_render_pipeline(
                 device,
                 RenderPipelineDescriptor {
-                    debug_label: "transmittance_lut".to_owned(),
+                    debug_label: "lut_transmittance".to_owned(),
                     layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
                     fragment_shader: ShaderEntryPoint::first_in(
-                        "atmosphere/transmittance_lut.wgsl",
+                        "atmosphere/lut_transmittance.wgsl",
                     ),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
@@ -241,11 +253,61 @@ impl Atmosphere {
                 },
             )?;
 
-            (transmittance_lut, render_pipe_transmittance_lut)
+            (lut_transmittance, render_pipe_lut_transmittance)
+        };
+
+        // Multiple scattering.
+        let (lut_multiple_scattering, render_pipe_lut_multiple_scattering) = {
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("lut_multiple_scattering"),
+                bind_group_layouts: &[
+                    &global_bindings.bind_group_layout.layout,
+                    &atmosphere_params_bindings.layout,
+                ],
+                push_constant_ranges: &[],
+            });
+
+            let lut_multiple_scattering = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Transmittance LUT"),
+                size: LUT_MULTIPLE_SCATTERING_SIZE,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let lut_multiple_scattering =
+                lut_multiple_scattering.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let render_pipe_lut_multiple_scattering = pipeline_manager.create_render_pipeline(
+                device,
+                RenderPipelineDescriptor {
+                    debug_label: "lut_multiple_scattering".to_owned(),
+                    layout,
+                    vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
+                    fragment_shader: ShaderEntryPoint::first_in(
+                        "atmosphere/lut_multiple_scattering.wgsl",
+                    ),
+                    fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                },
+            )?;
+
+            (lut_multiple_scattering, render_pipe_lut_multiple_scattering)
         };
 
         let render_atmosphere_bindings_main = BindGroupLayoutBuilder::new()
             // [in] transmittance lut
+            .next_binding_fragment(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            })
+            // [in] multiple scattering lut
             .next_binding_fragment(wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
                 view_dimension: wgpu::TextureViewDimension::D2,
@@ -261,7 +323,8 @@ impl Atmosphere {
 
         let render_atmosphere_bindgroup_main =
             BindGroupBuilder::new(&render_atmosphere_bindings_main)
-                .texture(&transmittance_lut)
+                .texture(&lut_transmittance)
+                .texture(&lut_multiple_scattering)
                 .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
                 .create(device, "render_atmosphere_main");
 
@@ -379,7 +442,7 @@ impl Atmosphere {
             )?;
 
             let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
-                .texture(&transmittance_lut)
+                .texture(&lut_transmittance)
                 .buffer(sampling_directions_buffer.as_entire_buffer_binding())
                 .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
                 .create(device, "atmosphere/compute_sh");
@@ -388,7 +451,8 @@ impl Atmosphere {
         };
 
         Ok(Self {
-            render_pipe_transmittance_lut,
+            render_pipe_lut_transmittance,
+            render_pipe_lut_multiple_scattering,
             render_pipe_render_atmosphere,
             compute_pipe_sh,
 
@@ -398,7 +462,8 @@ impl Atmosphere {
             render_atmosphere_bindgroup_screen_dependent,
             compute_sh_bind_group,
             sky_and_sun_lighting_params_buffer,
-            transmittance_lut,
+            lut_transmittance,
+            lut_multiple_scattering,
             atmosphere_params_buffer,
 
             parameters: AtmosphereParams::default(),
@@ -462,13 +527,15 @@ impl Atmosphere {
             compute_pass.set_bind_group(2, &self.compute_sh_bind_group, &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
+
+        // TODO: compute luts only if parameters have changed.
         {
             let mut render_pass = encoder.scoped_render_pass(
                 "Transmittance LUT",
                 wgpu::RenderPassDescriptor {
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.transmittance_lut,
+                        view: &self.lut_transmittance,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -485,7 +552,34 @@ impl Atmosphere {
             render_pass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
 
             render_pass.set_pipeline(
-                pipeline_manager.get_render_pipeline(self.render_pipe_transmittance_lut)?,
+                pipeline_manager.get_render_pipeline(self.render_pipe_lut_transmittance)?,
+            );
+            render_pass.draw(0..3, 0..1);
+        }
+        {
+            let mut render_pass = encoder.scoped_render_pass(
+                "Multiple scattering LUT",
+                wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.lut_multiple_scattering,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                },
+            );
+
+            render_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
+
+            render_pass.set_pipeline(
+                pipeline_manager.get_render_pipeline(self.render_pipe_lut_multiple_scattering)?,
             );
             render_pass.draw(0..3, 0..1);
         }

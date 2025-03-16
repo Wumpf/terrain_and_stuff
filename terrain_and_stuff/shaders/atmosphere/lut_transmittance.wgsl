@@ -1,6 +1,7 @@
 // Transmittance LUT.
 //
-// Each pixel coordinate corresponds to a sun zenith angle (x axis) and height (y axis).
+// Each pixel coordinate corresponds to a sun zenith angle (x axis) and height (y axis)
+// with some parameterization (see `ray_to_sun_texcoord`).
 // The value is the transmittance from that point to sun, through the atmosphere using single scattering only
 
 #import "constants.wgsl"::{ERROR_RGBA, TAU}

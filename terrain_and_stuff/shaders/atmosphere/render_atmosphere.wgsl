@@ -4,7 +4,7 @@ enable dual_source_blending;
 
 #import "constants.wgsl"::{ERROR_RGBA}
 #import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
-#import "global_bindings.wgsl"::{frame_uniforms}
+#import "global_bindings.wgsl"::{frame_uniforms, trilinear_sampler_clamp}
 #import "intersections.wgsl"::{Ray}
 #import "sh.wgsl"::{evaluate_sh2} // For debugging only.
 
@@ -12,13 +12,16 @@ enable dual_source_blending;
     atmosphere_params,
     AtmosphereDebugDrawMode_None,
     AtmosphereDebugDrawMode_Sh,
-    AtmosphereDebugDrawMode_NoScatteringOverlay,
+    AtmosphereDebugDrawMode_NoGeometryOverlay,
+    AtmosphereDebugDrawMode_TransmittanceLut,
+    AtmosphereDebugDrawMode_MultipleScatteringLut,
 }
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 #import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
 
-@group(2) @binding(0) var transmittance_lut: texture_2d<f32>;
-@group(2) @binding(1) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;
+@group(2) @binding(0) var lut_transmittance: texture_2d<f32>;
+@group(2) @binding(1) var lut_multiple_scattering: texture_2d<f32>;
+@group(2) @binding(2) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 @group(3) @binding(0) var screen_depth: texture_2d<f32>;
 
 const NumScatteringSteps: f32 = 64.0;
@@ -51,7 +54,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     let planet_relative_position_km = vec3(0.0, max(0.0, camera_ray.origin.y * 0.001) + atmosphere_params.ground_radius_km, 0.0);
 
     var result = raymarch_scattering(
-        transmittance_lut,
+        lut_transmittance,
         camera_ray.direction,
         planet_relative_position_km,
         frame_uniforms.dir_to_sun,
@@ -75,7 +78,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
             break;
         }
 
-        case AtmosphereDebugDrawMode_NoScatteringOverlay: {
+        case AtmosphereDebugDrawMode_NoGeometryOverlay: {
             if depth_buffer_depth != 0.0 {
                 var debug_result = fragment_result;
                 debug_result.transmittance = vec4f(1.0);
@@ -85,19 +88,18 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
             break;
         }
 
+        case AtmosphereDebugDrawMode_TransmittanceLut: {
+            return FragmentResult(textureSample(lut_transmittance, trilinear_sampler_clamp, texcoord), vec4f(0.0));
+        }
+
+        case AtmosphereDebugDrawMode_MultipleScatteringLut: {
+            return FragmentResult(textureSample(lut_multiple_scattering, trilinear_sampler_clamp, texcoord), vec4f(0.0));
+        }
+
         default: {
             break;
         }
     }
 
     return fragment_result;
-
-    // Debug stuff:
-    //return FragmentResult(vec4f(fract(max_marching_distance_km * 0.1)), vec4f(0.0));
-
-    //let world_space_position = (view_space_position * frame_uniforms.view_from_world).xyz + frame_uniforms.camera_position;
-    //return FragmentResult(vec4f(fract(abs(world_space_position) * 0.0001), 1.0), vec4f(0.0));
-
-    //let trasmittance_lut = textureSample(transmittance_lut, trilinear_sampler_clamp, texcoord);
-    //return FragmentResult(trasmittance_lut, vec4f(0.0));
 }
