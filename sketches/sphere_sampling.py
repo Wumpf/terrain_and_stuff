@@ -9,11 +9,13 @@ rr.send_blueprint(
             rrb.Horizontal(
                 rrb.Spatial3DView(origin="pcg_1024"),
                 rrb.Spatial3DView(origin="np_random_1024"),
+                rrb.Spatial3DView(origin="fib_lattice_1024"),
                 rrb.Spatial3DView(origin="halton_1024"),
             ),
             rrb.Horizontal(
                 rrb.Spatial3DView(origin="pcg_2048"),
                 rrb.Spatial3DView(origin="np_random_2048"),
+                rrb.Spatial3DView(origin="fib_lattice_2048"),
                 rrb.Spatial3DView(origin="halton_2048"),
             ),
         ),
@@ -67,6 +69,18 @@ def pcg_vars(num_samples):
     return z, t
 
 
+def fib_lattice_sampling(num_samples):
+    goldenRatio = (1 + 5**0.5) / 2
+    i = np.arange(0, num_samples)
+    theta = 2 * np.pi * i / goldenRatio
+    phi = np.arccos(1 - 2 * (i + 0.5) / num_samples)
+
+    x = np.cos(theta) * np.sin(phi)
+    y = np.sin(theta) * np.sin(phi)
+    z = np.cos(phi)
+    return np.column_stack([x, y, z])
+
+
 def np_random_vars(num_samples):
     z = np.random.uniform(-1, 1, size=num_samples)
     t = np.random.uniform(0, 2 * np.pi, size=num_samples)
@@ -103,6 +117,12 @@ for num_samples in [1024, 2048]:
     points = vars_to_points(z, t)
     rr.log(
         f"pcg_{num_samples}",
+        rr.Points3D(positions=points, colors=color),
+    )
+
+    points = fib_lattice_sampling(num_samples)
+    rr.log(
+        f"fib_lattice_{num_samples}",
         rr.Points3D(positions=points, colors=color),
     )
 

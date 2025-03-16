@@ -52,7 +52,8 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     let sample_index = id.x;
     // TODO: Just learned about Fibbonaci lattice
     // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
-    // Using this over on `lut_multiple_scattering.wgsl` and wondering if I could use that here as well.
+    // Using this over on `lut_multiple_scattering.wgsl`. Should use that here as well.
+    // Throw out halton sequence stuff again.
     let direction = sampling_directions[sample_index];
 
     let planet_relative_position_km = vec3f(0.0, atmosphere_params.ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
