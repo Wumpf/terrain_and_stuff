@@ -18,6 +18,7 @@
 // by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
 #import "intersections.wgsl"::{Ray, ray_sphere_intersect}
+#import "global_bindings.wgsl"::{trilinear_sampler_clamp}
 
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
@@ -29,7 +30,23 @@ struct ScatteringResult {
     transmittance : vec3f,
 }
 
-fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, planet_relative_position_km: vec3f, dir_to_sun: vec3f, geometry_distance_on_camera_ray: f32) -> ScatteringResult {
+fn sample_multiple_scattering_lut(multiple_scattering_lut: texture_2d<f32>,
+                                  altitude_km: f32,
+                                  dir_to_sun: vec3f) -> vec3f {
+    let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
+    let relative_altitude = altitude_km / (atmosphere_params.atmosphere_radius_km - atmosphere_params.ground_radius_km);
+    let texcoord = vec2f(sun_cos_zenith_angle * 0.5 + 0.5, relative_altitude);
+
+    return textureSampleLevel(multiple_scattering_lut, trilinear_sampler_clamp, texcoord, 0.0).xyz;
+}
+
+fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
+                        multiple_scattering_lut: texture_2d<f32>,
+                        direction: vec3f,
+                        planet_relative_position_km: vec3f,
+                        dir_to_sun: vec3f,
+                        geometry_distance_on_camera_ray: f32
+                    ) -> ScatteringResult {
     // Figure out where the ray hits either the planet or the atmosphere end.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
     let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
@@ -64,8 +81,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, pla
         let sample_transmittance = exp(-dt * scattering.total_extinction);
 
         let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, dir_to_sun);
-        // TODO: implement multiple scattering LUT.
-        let multiscattered_luminance = vec3f(0.0);
+        let multiscattered_luminance = sample_multiple_scattering_lut(multiple_scattering_lut, altitude_km, dir_to_sun);
 
         // TODO: earth shadow at night?
         // https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/Resources/RenderSkyRayMarching.hlsl#L181

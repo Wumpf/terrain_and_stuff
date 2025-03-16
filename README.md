@@ -30,8 +30,6 @@ Various implementations exists:
 * [Andrew Helmer's ShaderToy](https://www.shadertoy.com/view/slSXRW).
 * [Lukas Herzbeger's rigorous WebGPU implementation](https://github.com/JolifantoBambla/webgpu-sky-atmosphere) with many different configuration options and compute shader variants
 
-TODO: haven't implemented the whole thing yet - missing are multiple scattering and shadow map sampling.
-
 Display transform
 -----------------
 

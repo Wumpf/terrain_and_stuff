@@ -24,8 +24,9 @@ const NUM_SAMPLES: u32 = 1024;
 const SAMPLE_NORMALIZATION_FACTOR: f32 = (1.0 / f32(NUM_SAMPLES)) * (2.0 * TAU); // Normalize by the number of samples and the sphere's surface area.
 
 @group(2) @binding(0) var transmittance_lut: texture_2d<f32>;
-@group(2) @binding(1) var<storage, read> sampling_directions: array<vec3f>;
-@group(2) @binding(2) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
+@group(2) @binding(1) var multiple_scattering_lut: texture_2d<f32>;
+@group(2) @binding(2) var<storage, read> sampling_directions: array<vec3f>;
+@group(2) @binding(3) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 
 var<workgroup> shared_buffer: array<vec3f, NUM_SAMPLES>;
 
@@ -61,6 +62,7 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
 
     var sample_raymarch_result = raymarch_scattering(
         transmittance_lut,
+        multiple_scattering_lut,
         direction,
         planet_relative_position_km,
         frame_uniforms.dir_to_sun,
@@ -88,6 +90,7 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     if (sample_index == 0) {
         let sun_raymarch_result = raymarch_scattering(
             transmittance_lut,
+            multiple_scattering_lut,
             frame_uniforms.dir_to_sun,
             planet_relative_position_km,
             frame_uniforms.dir_to_sun,

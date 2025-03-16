@@ -55,6 +55,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
 
     var result = raymarch_scattering(
         lut_transmittance,
+        lut_multiple_scattering,
         camera_ray.direction,
         planet_relative_position_km,
         frame_uniforms.dir_to_sun,
