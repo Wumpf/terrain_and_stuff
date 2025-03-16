@@ -87,7 +87,7 @@ impl Application<'_> {
         })
         .await;
 
-        let window = Window::new(
+        let mut window = Window::new(
             "terrain_and_stuff",
             WIDTH,
             HEIGHT,
@@ -170,6 +170,7 @@ impl Application<'_> {
         .context("Create HDR backbuffer & display transform pipeline")?;
 
         let gui = EguiMinifb::new(&device, &screen);
+        window.set_input_callback(Box::new(gui.text_callback()));
 
         let atmosphere = Atmosphere::new(
             &device,

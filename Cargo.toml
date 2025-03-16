@@ -17,6 +17,8 @@ wgpu = { git = "https://github.com/wumpf/wgpu", branch = "webgpu-dual-source-ble
 naga = { git = "https://github.com/wumpf/wgpu", branch = "webgpu-dual-source-blending" }
 #wgpu-hal = { git = "https://github.com/wumpf/wgpu", rev = "5a0699f589ebe69e391c3f3de82f3ace48492fc8" }
 
+minifb = { git = "https://github.com/wumpf/rust_minifb", branch = "fix-active-requiring-mut" }
+
 
 #wgpu = { path = "../wgpu/wgpu" }
 #wgpu-types = { path = "../wgpu/wgpu-types" }
