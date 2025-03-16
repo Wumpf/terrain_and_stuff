@@ -57,7 +57,6 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
         let sample_dir = spherical_dir(phi, theta);
         let sample_ray_planet_km = Ray(ray_to_sun_km.origin, sample_dir);
 
-
         let atmosphere_distance_km = ray_sphere_intersect(sample_ray_planet_km, atmosphere_params.atmosphere_radius_km);
         let ground_distance_km = ray_sphere_intersect(sample_ray_planet_km, atmosphere_params.ground_radius_km);
         let max_marching_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
@@ -79,8 +78,9 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             t = t_new;
 
             let new_planet_relative_position_km = sample_ray_planet_km.origin + t * sample_ray_planet_km.direction;
-            let altitude_km = clamp(length(new_planet_relative_position_km) - atmosphere_params.ground_radius_km,
-                                    0.0, atmosphere_params.atmosphere_radius_km);
+            let altitude_km = clamp(length(new_planet_relative_position_km),
+                                    atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km)
+                                    - atmosphere_params.ground_radius_km;
 
             let scattering = scattering_values_for(altitude_km);
             let sample_transmittance = exp(-dt * scattering.total_extinction);
@@ -107,11 +107,22 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             transmittance *= sample_transmittance;
         }
 
+        // TODO: something is wrong with the transmittance at this point - it's "streaky" across the lut!
 
         // If we hit the ground, add the ground albedo to the luminance.
-        if (ground_distance_km > 0.0 && dot(sample_ray_planet_km.origin, ray_to_sun_km.direction) > 0.0) { // TODO: isn't that just pos.y * sun_dir.y > 0.0?
-            let sun_transmittance_at_ground = sample_transmittance_lut(lut_transmittance, 0.0, ray_to_sun_km.direction);
-            second_order_scattering += transmittance * atmosphere_params.ground_albedo * sun_transmittance_at_ground;
+        if ground_distance_km > 0.0 && max_marching_distance_km == ground_distance_km {
+            let planet_relative_position_km = sample_ray_planet_km.origin + max_marching_distance_km * sample_ray_planet_km.direction;
+            let distance_from_planet_center_km = length(planet_relative_position_km);
+            // TODO: shouldn't this just always be 0.0, after all we hit the surface,
+            let altitude_km = clamp(distance_from_planet_center_km,
+                                    atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km)
+                                    - atmosphere_params.ground_radius_km;
+
+            let zenith = planet_relative_position_km / distance_from_planet_center_km;
+            let n_dot_l = saturate(dot(zenith, ray_to_sun_km.direction));
+
+            let sun_transmittance_at_ground = sample_transmittance_lut(lut_transmittance, altitude_km, ray_to_sun_km.direction);
+            second_order_scattering += transmittance * atmosphere_params.ground_albedo * sun_transmittance_at_ground * n_dot_l / PI;
         }
     }
 
