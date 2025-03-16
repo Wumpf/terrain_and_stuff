@@ -29,6 +29,9 @@ struct AtmosphereParams {
     // -- row boundary --
 
     sun_illuminance: vec3f,
+    // -- row boundary --
+
+    ground_albedo: vec3f,
 }
 
 @group(1) @binding(0) var<uniform> atmosphere_params: AtmosphereParams;

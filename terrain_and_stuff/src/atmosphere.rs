@@ -86,6 +86,8 @@ pub struct AtmosphereParams {
     // -- row boundary --
     pub sun_illuminance: Vec3RowPadded,
     // -- row boundary --
+    pub ground_albedo: Vec3RowPadded,
+    // -- row boundary --
 }
 
 impl Default for AtmosphereParams {
@@ -123,6 +125,8 @@ impl Default for AtmosphereParams {
 
             // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
             sun_disk_illuminance_factor: 100.0,
+
+            ground_albedo: glam::vec3(0.3, 0.3, 0.3).into(),
         }
     }
 }
@@ -135,12 +139,12 @@ pub struct Atmosphere {
     compute_pipe_sh: ComputePipelineHandle,
 
     atmosphere_params_bindgroup: wgpu::BindGroup,
+    render_lut_multiple_scattering_bindgroup: wgpu::BindGroup,
+    compute_sh_bind_group: wgpu::BindGroup,
 
     render_atmosphere_bindgroup_main: wgpu::BindGroup,
     render_atmosphere_bindings_screen_dependent: BindGroupLayoutWithDesc,
     render_atmosphere_bindgroup_screen_dependent: wgpu::BindGroup,
-
-    compute_sh_bind_group: wgpu::BindGroup,
 
     lut_transmittance: wgpu::TextureView,
     lut_multiple_scattering: wgpu::TextureView,
@@ -257,12 +261,30 @@ impl Atmosphere {
         };
 
         // Multiple scattering.
-        let (lut_multiple_scattering, render_pipe_lut_multiple_scattering) = {
+        let (
+            lut_multiple_scattering,
+            render_lut_multiple_scattering_bindgroup,
+            render_pipe_lut_multiple_scattering,
+        ) = {
+            // Need the transmittance lut to compute multiple scattering lut.
+            let lut_multiple_scattering_bindings = BindGroupLayoutBuilder::new()
+                .next_binding_fragment(wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                })
+                .create(device, "lut_multiple_scattering");
+            let render_lut_multiple_scattering_bindgroup =
+                BindGroupBuilder::new(&lut_multiple_scattering_bindings)
+                    .texture(&lut_transmittance)
+                    .create(device, "lut_multiple_scattering");
+
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("lut_multiple_scattering"),
                 bind_group_layouts: &[
                     &global_bindings.bind_group_layout.layout,
                     &atmosphere_params_bindings.layout,
+                    &lut_multiple_scattering_bindings.layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -297,7 +319,11 @@ impl Atmosphere {
                 },
             )?;
 
-            (lut_multiple_scattering, render_pipe_lut_multiple_scattering)
+            (
+                lut_multiple_scattering,
+                render_lut_multiple_scattering_bindgroup,
+                render_pipe_lut_multiple_scattering,
+            )
         };
 
         let render_atmosphere_bindings_main = BindGroupLayoutBuilder::new()
@@ -457,10 +483,13 @@ impl Atmosphere {
             compute_pipe_sh,
 
             atmosphere_params_bindgroup,
+            render_lut_multiple_scattering_bindgroup,
+            compute_sh_bind_group,
+
             render_atmosphere_bindgroup_main,
             render_atmosphere_bindings_screen_dependent,
             render_atmosphere_bindgroup_screen_dependent,
-            compute_sh_bind_group,
+
             sky_and_sun_lighting_params_buffer,
             lut_transmittance,
             lut_multiple_scattering,
@@ -550,7 +579,6 @@ impl Atmosphere {
 
             render_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
             render_pass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
-
             render_pass.set_pipeline(
                 pipeline_manager.get_render_pipeline(self.render_pipe_lut_transmittance)?,
             );
@@ -577,7 +605,7 @@ impl Atmosphere {
 
             render_pass.set_bind_group(0, &global_bindings.bind_group, &[]);
             render_pass.set_bind_group(1, &self.atmosphere_params_bindgroup, &[]);
-
+            render_pass.set_bind_group(2, &self.render_lut_multiple_scattering_bindgroup, &[]);
             render_pass.set_pipeline(
                 pipeline_manager.get_render_pipeline(self.render_pipe_lut_multiple_scattering)?,
             );

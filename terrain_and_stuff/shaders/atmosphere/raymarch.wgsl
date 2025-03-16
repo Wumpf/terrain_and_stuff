@@ -17,28 +17,16 @@
 // for our photometric units actually mean - see also Nathan's comment here on recommending to cheat
 // by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
-#import "global_bindings.wgsl"::{trilinear_sampler_clamp}
 #import "intersections.wgsl"::{Ray, ray_sphere_intersect}
 
 #import "atmosphere/params.wgsl"::{atmosphere_params}
-#import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase}
+#import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
 
 const NumScatteringSteps: f32 = 64.0;
 
 struct ScatteringResult {
     scattering : vec3f,
     transmittance : vec3f,
-}
-
-fn sample_transmittance_lut(transmittance_lut: texture_2d<f32>, altitude_km: f32, dir_to_sun: vec3f) -> vec3f {
-    // See `transmittance_lut.wgsl#ray_to_sun_texcoord` for what it is we're sampling here!
-    // u coordinate is mapped to the cos(zenith angle)
-    // v coordinate is mapped to the altitude from ground top atmosphere top.
-    let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
-    let relative_altitude = sqrt(altitude_km / (atmosphere_params.atmosphere_radius_km - atmosphere_params.ground_radius_km));
-    let texcoord = vec2f(pow(sun_cos_zenith_angle, 1.0/5.0) * 0.5 + 0.5, relative_altitude);
-
-    return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }
 
 fn raymarch_scattering(transmittance_lut: texture_2d<f32>, direction: vec3f, planet_relative_position_km: vec3f, dir_to_sun: vec3f, geometry_distance_on_camera_ray: f32) -> ScatteringResult {

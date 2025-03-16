@@ -1,3 +1,4 @@
+#import "global_bindings.wgsl"::{trilinear_sampler_clamp}
 #import "constants.wgsl"::{TAU}
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 
@@ -49,4 +50,24 @@ fn mie_phase(cos_theta: f32) -> f32 {
 fn rayleigh_phase(cos_theta: f32) -> f32 {
     const k = 3.0 / (8.0 * TAU);
     return k * (1.0 + cos_theta * cos_theta);
+}
+
+fn transmittance_lut_coord(altitude_km: f32, altitude_range_km: f32, dir_to_sun: vec3f) -> vec2f {
+    // See `transmittance_lut.wgsl#ray_to_sun_texcoord` for what it is we're sampling here!
+    // u coordinate is mapped to the cos(zenith angle)
+    // v coordinate is mapped to the altitude from ground top atmosphere top.
+    let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
+    let relative_altitude = sqrt(altitude_km / altitude_range_km);
+    return vec2f(pow(sun_cos_zenith_angle, 1.0/5.0) * 0.5 + 0.5, relative_altitude);
+}
+
+fn sample_transmittance_lut(transmittance_lut: texture_2d<f32>, altitude_km: f32, dir_to_sun: vec3f) -> vec3f {
+    // See `transmittance_lut.wgsl#ray_to_sun_texcoord` for what it is we're sampling here!
+    // u coordinate is mapped to the cos(zenith angle)
+    // v coordinate is mapped to the altitude from ground top atmosphere top.
+    let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
+    let relative_altitude = sqrt(altitude_km / (atmosphere_params.atmosphere_radius_km - atmosphere_params.ground_radius_km));
+    let texcoord = vec2f(pow(sun_cos_zenith_angle, 1.0/5.0) * 0.5 + 0.5, relative_altitude);
+
+    return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }

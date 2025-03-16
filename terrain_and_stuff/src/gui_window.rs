@@ -65,6 +65,7 @@ fn atmosphere_settings(ui: &mut egui::Ui, atmosphere: &mut Atmosphere) {
         sun_disk_illuminance_factor,
         ozone_absorption_per_km_density,
         sun_illuminance,
+        ground_albedo,
     } = &mut atmosphere.parameters;
 
     let default_params = AtmosphereParams::default();
@@ -206,6 +207,14 @@ fn atmosphere_settings(ui: &mut egui::Ui, atmosphere: &mut Atmosphere) {
                     drag_value_vec3_precise_positive,
                 );
                 ui.end_row();
+
+                ui.label("Ground albedo");
+                with_default(
+                    ui,
+                    ground_albedo,
+                    default_params.ground_albedo,
+                    drag_value_vec3_precise_positive,
+                );
             });
         });
 }
