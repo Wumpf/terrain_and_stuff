@@ -75,7 +75,7 @@ fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
     let normal = normalize(in.normal);
 
     let illuminance_sky = evaluate_sh2_cosine(normal, sky_and_sun_lighting_params.sky_luminance_sh_coefficients);
-    let illuminance_direct = sky_and_sun_lighting_params.sun_illuminance * max(dot(normal, frame_uniforms.dir_to_sun), 0.0);
+    let illuminance_direct = sky_and_sun_lighting_params.sun_illuminance * saturate(dot(normal, frame_uniforms.dir_to_sun));
     let illuminance = illuminance_direct + illuminance_sky;
 
     // TODO: the sky illuminance doesn't look quite right yet. let's add ui accessible debug flags.

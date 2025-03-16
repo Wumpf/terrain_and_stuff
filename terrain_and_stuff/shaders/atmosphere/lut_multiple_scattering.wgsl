@@ -9,9 +9,8 @@
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
 
-const MultipleScatteringSteps: f32 = 20.0;
-const MultipleScatteringSamplesSqrt: f32 = 8.0; // 64 directional samples.
 const DirectionSampleCount: u32 = 64;
+const MultipleScatteringSteps: u32 = 20;
 
 @group(2) @binding(0) var lut_transmittance: texture_2d<f32>;
 
@@ -72,15 +71,17 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
         // Loop similar to raymarch.wgsl#raymarch_scattering
         // But we're not marching towards the sun, but along the sample direction.
-        for (var i = 0.0; i < MultipleScatteringSteps; i += 1.0) {
-            let t_new = ((i + sample_segment_t) / MultipleScatteringSteps) * max_marching_distance_km;
+        for (var i: u32 = 0; i < MultipleScatteringSteps; i += 1) {
+            let t_new = ((f32(i) + sample_segment_t) / f32(MultipleScatteringSteps)) * max_marching_distance_km;
             let dt = t_new - t;
             t = t_new;
 
             let new_planet_relative_position_km = sample_ray_planet_km.origin + t * sample_ray_planet_km.direction;
-            let altitude_km = clamp(length(new_planet_relative_position_km),
-                                    atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km)
-                                    - atmosphere_params.ground_radius_km;
+            let sample_height = length(new_planet_relative_position_km);
+            let altitude_km = clamp(sample_height, atmosphere_params.ground_radius_km,
+                                    atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
+            let zenith = new_planet_relative_position_km / sample_height;
+            let sun_cos_zenith_angle = dot(zenith, ray_to_sun_km.direction);
 
             let scattering = scattering_values_for(altitude_km);
             let sample_transmittance = exp(-dt * scattering.total_extinction);
@@ -94,7 +95,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             // TODO: ShaderToy says:
             // This is slightly different from the paper, but I think the paper has a mistake?
             // In equation (6), I think S(x,w_s) should be S(x-tv,w_s).
-            let sun_transmittance = sample_transmittance_lut(lut_transmittance, altitude_km, ray_to_sun_km.direction);
+            let sun_transmittance = sample_transmittance_lut(lut_transmittance, altitude_km, sun_cos_zenith_angle);
 
             let rayleigh_in_scattering = scattering.rayleigh * rayleigh_phase_value;
             let mie_in_scattering = scattering.mie * mie_phase_value;
@@ -111,18 +112,15 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
         // If we hit the ground, add the ground albedo to the luminance.
         if ground_distance_km > 0.0 && max_marching_distance_km == ground_distance_km {
-            let planet_relative_position_km = sample_ray_planet_km.origin + max_marching_distance_km * sample_ray_planet_km.direction;
-            let distance_from_planet_center_km = length(planet_relative_position_km);
-            // TODO: shouldn't this just always be 0.0, after all we hit the surface,
-            let altitude_km = clamp(distance_from_planet_center_km,
-                                    atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km)
-                                    - atmosphere_params.ground_radius_km;
+            let new_planet_relative_position_km = sample_ray_planet_km.origin + max_marching_distance_km * sample_ray_planet_km.direction;
+            let sample_height = length(new_planet_relative_position_km);
+            let altitude_km = clamp(sample_height, atmosphere_params.ground_radius_km,
+                                    atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
+            let zenith = new_planet_relative_position_km / sample_height;
+            let sun_cos_zenith_angle = dot(zenith, ray_to_sun_km.direction);
 
-            let zenith = planet_relative_position_km / distance_from_planet_center_km;
-            let n_dot_l = saturate(dot(zenith, ray_to_sun_km.direction));
-
-            let sun_transmittance_at_ground = sample_transmittance_lut(lut_transmittance, altitude_km, ray_to_sun_km.direction);
-            second_order_scattering += transmittance * atmosphere_params.ground_albedo * sun_transmittance_at_ground * n_dot_l / PI;
+            let sun_transmittance_at_ground = sample_transmittance_lut(lut_transmittance, altitude_km, sun_cos_zenith_angle);
+            second_order_scattering += transmittance * atmosphere_params.ground_albedo * sun_transmittance_at_ground * saturate(sun_cos_zenith_angle) / PI;
         }
     }
 

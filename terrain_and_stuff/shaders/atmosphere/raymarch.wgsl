@@ -32,8 +32,7 @@ struct ScatteringResult {
 
 fn sample_multiple_scattering_lut(multiple_scattering_lut: texture_2d<f32>,
                                   altitude_km: f32,
-                                  dir_to_sun: vec3f) -> vec3f {
-    let sun_cos_zenith_angle = dir_to_sun.y; //dot(dir_to_sun, vec3f(0.0, 1.0, 0.0));
+                                  sun_cos_zenith_angle: f32) -> vec3f {
     let relative_altitude = altitude_km / (atmosphere_params.atmosphere_radius_km - atmosphere_params.ground_radius_km);
     let texcoord = vec2f(sun_cos_zenith_angle * 0.5 + 0.5, relative_altitude);
 
@@ -73,19 +72,24 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
         t = t_new;
 
         let new_planet_relative_position_km = planet_relative_position_km + t * direction;
-        let altitude_km = clamp(length(new_planet_relative_position_km),
-                                atmosphere_params.ground_radius_km,
+        let sample_height = length(new_planet_relative_position_km);
+        let altitude_km = clamp(sample_height, atmosphere_params.ground_radius_km,
                                 atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
+        let zenith = new_planet_relative_position_km / sample_height;
+        let sun_cos_zenith_angle = dot(zenith, dir_to_sun);
 
         let scattering = scattering_values_for(altitude_km);
         let sample_transmittance = exp(-dt * scattering.total_extinction);
 
-        let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, dir_to_sun);
-        let multiscattered_luminance = sample_multiple_scattering_lut(multiple_scattering_lut, altitude_km, dir_to_sun);
+        let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, sun_cos_zenith_angle);
+        let multiscattered_luminance = sample_multiple_scattering_lut(multiple_scattering_lut, altitude_km, sun_cos_zenith_angle);
 
         // TODO: earth shadow at night?
         // https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/Resources/RenderSkyRayMarching.hlsl#L181
+        // let t_earth = ray_sphere_intersect(Ray(new_planet_relative_position_km, -dir_to_sun), atmosphere_params.ground_radius_km);
+        // let planet_shadow = f32(t_earth >= 0.0);
         let planet_shadow = 1.0;
+
         // TODO: large shadow casters (like mountains or clouds)
         let shadow = 1.0;
 
