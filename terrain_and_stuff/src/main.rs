@@ -121,7 +121,7 @@ impl Application<'_> {
         log::info!("Created wgpu adapter: {:?}", adapter.get_info());
 
         let optional_features = wgpu_profiler::GpuProfiler::ALL_WGPU_TIMER_FEATURES;
-        let required_features = wgpu::Features::from(wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING);
+        let required_features = wgpu::Features::from(wgpu::Features::DUAL_SOURCE_BLENDING);
         let required_limits = wgpu::Limits {
             // Using larger workgroups makes sky SH convolution shader simpler.
             // 1024 is widely supported
@@ -134,19 +134,17 @@ impl Application<'_> {
         };
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("Device"),
-                    required_features: required_features
-                        | optional_features.intersection(adapter.features()),
-                    // Useful for debugging.
-                    //#[cfg(not(target_arch = "wasm32"))]
-                    //required_features: required_features | wgpu::FeaturesWebGPU::POLYGON_MODE_LINE,
-                    required_limits,
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("Device"),
+                required_features: required_features
+                    | optional_features.intersection(adapter.features()),
+                // Useful for debugging.
+                //#[cfg(not(target_arch = "wasm32"))]
+                //required_features: required_features | wgpu::FeaturesWebGPU::POLYGON_MODE_LINE,
+                required_limits,
+                memory_hints: wgpu::MemoryHints::Performance,
+                ..Default::default()
+            })
             .await
             .context("Failed to create device")?;
 
@@ -349,6 +347,7 @@ impl Application<'_> {
                             label: Some("Display transform & GUI"),
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: &view,
+                                depth_slice: None,
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -423,6 +422,7 @@ impl Application<'_> {
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: self.hdr_backbuffer.texture_view(),
+                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -456,6 +456,7 @@ impl Application<'_> {
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: self.hdr_backbuffer.texture_view(),
+                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
