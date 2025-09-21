@@ -98,12 +98,17 @@ fn pick_surface_format(surface: &wgpu::Surface, adapter: &wgpu::Adapter) -> wgpu
     // So if we just blindly pick the first, we'll end up with different colors!
     // Since all the colors used in this example are _already_ in sRGB, pick the first non-sRGB format!
     let surface_capabilitites = surface.get_capabilities(adapter);
+    log::info!("Surface capabilities: {:?}", surface_capabilitites);
+
     for format in &surface_capabilitites.formats {
         if !format.is_srgb() {
             return *format;
         }
     }
 
-    log::warn!("Couldn't find a non-sRGB format, defaulting to the first one");
+    log::warn!(
+        "Couldn't find a non-sRGB format, defaulting to the first one ({:?})",
+        surface_capabilitites.formats[0]
+    );
     surface_capabilitites.formats[0]
 }
