@@ -4,8 +4,9 @@ use bytemuck::Contiguous as _;
 use egui::Widget as _;
 
 use crate::{
-    atmosphere::{Atmosphere, AtmosphereDebugDrawMode, AtmosphereParams},
+    atmosphere::{AtmosphereDebugDrawMode, AtmosphereParams, SunAngles},
     camera::Camera,
+    config::Config,
 };
 
 use ui_elements::{
@@ -16,15 +17,19 @@ use ui_elements::{
 pub fn run_gui(
     egui_ctx: &egui::Context,
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
-    atmosphere: &mut Atmosphere,
     camera: &mut Camera,
     uses_cursor: &mut bool,
+    config: &mut Config,
 ) {
     let response = egui::Window::new("Controls").show(egui_ctx, |ui| {
+        if ui.button("Reset all to defaults").clicked() {
+            *config = Config::default();
+        }
+
         egui::CollapsingHeader::new("Atmosphere")
             .default_open(true)
             .show(ui, |ui| {
-                atmosphere_settings(ui, atmosphere);
+                atmosphere_settings(ui, &mut config.sun_angles, &mut config.atmosphere_params);
             });
 
         egui::CollapsingHeader::new("Camera")
@@ -58,7 +63,11 @@ pub fn run_gui(
         egui_ctx.is_using_pointer() || response.is_some_and(|r| r.response.contains_pointer());
 }
 
-fn atmosphere_settings(ui: &mut egui::Ui, atmosphere: &mut Atmosphere) {
+fn atmosphere_settings(
+    ui: &mut egui::Ui,
+    sun_angles: &mut SunAngles,
+    atmosphere_params: &mut AtmosphereParams,
+) {
     let AtmosphereParams {
         draw_mode,
         ground_radius_km,
@@ -73,17 +82,22 @@ fn atmosphere_settings(ui: &mut egui::Ui, atmosphere: &mut Atmosphere) {
         ozone_absorption_per_km_density,
         sun_illuminance,
         ground_albedo,
-    } = &mut atmosphere.parameters;
+    } = atmosphere_params;
 
     let default_params = AtmosphereParams::default();
 
     egui::Grid::new("atmosphere_grid").show(ui, |ui| {
+        let SunAngles {
+            sun_azimuth,
+            sun_altitude,
+        } = sun_angles;
+
         ui.label("Sun azimuth");
-        drag_angle(ui, &mut atmosphere.sun_azimuth);
+        drag_angle(ui, sun_azimuth);
         ui.end_row();
 
         ui.label("Sun altitude");
-        drag_angle(ui, &mut atmosphere.sun_altitude);
+        drag_angle(ui, sun_altitude);
         ui.end_row();
 
         let mut draw_mode_enum = draw_mode.get();

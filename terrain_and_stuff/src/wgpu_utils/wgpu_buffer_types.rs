@@ -155,6 +155,32 @@ pub struct Vec3RowPadded {
     pub padding: f32,
 }
 
+impl serde::Serialize for Vec3RowPadded {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        glam::Vec3::from(*self).serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Vec3RowPadded {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        glam::Vec3::deserialize(deserializer).map(Self::from)
+    }
+}
+
+impl PartialEq for Vec3RowPadded {
+    fn eq(&self, other: &Self) -> bool {
+        glam::Vec3::from(*self) == glam::Vec3::from(*other)
+    }
+}
+
+impl Eq for Vec3RowPadded {}
+
 impl From<Vec3RowPadded> for glam::Vec3 {
     #[inline]
     fn from(v: Vec3RowPadded) -> Self {
@@ -330,7 +356,7 @@ pub struct PaddingRow {
 }
 
 /// A wrapper around an enum that is always stored as a u32 for consumption in wgsl.
-#[derive(Clone, Copy, Zeroable)]
+#[derive(Clone, Copy, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct WgslEnum<T>
 where
@@ -361,5 +387,27 @@ impl<T: Copy + Into<u32> + CheckedBitPattern + Zeroable> WgslEnum<T> {
 
     pub fn get(&self) -> T {
         bytemuck::checked::try_cast(self.value).unwrap()
+    }
+}
+
+impl<T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static + serde::Serialize>
+    serde::Serialize for WgslEnum<T>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.get().serialize(serializer)
+    }
+}
+
+impl<'de, T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static + serde::Deserialize<'de>>
+    serde::Deserialize<'de> for WgslEnum<T>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(|value| Self::new(value))
     }
 }

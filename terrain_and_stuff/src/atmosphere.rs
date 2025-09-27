@@ -25,6 +25,8 @@ use crate::{
     bytemuck::Zeroable,
     bytemuck::CheckedBitPattern,
     bytemuck::Contiguous,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[repr(u32)]
 pub enum AtmosphereDebugDrawMode {
@@ -53,7 +55,13 @@ impl From<AtmosphereDebugDrawMode> for u32 {
     }
 }
 
-#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+/// Parameters for the atmosphere other than light direction.
+///
+/// This is GPU uploaded every frame for simplicity.
+/// (small'ish structs like this don't make a dent perf wise 🤷)
+#[derive(
+    Clone, Copy, PartialEq, bytemuck::Zeroable, bytemuck::Pod, serde::Serialize, serde::Deserialize,
+)]
 #[repr(C)]
 pub struct AtmosphereParams {
     pub draw_mode: WgslEnum<AtmosphereDebugDrawMode>,
@@ -131,6 +139,36 @@ impl Default for AtmosphereParams {
     }
 }
 
+/// More like sun direction I guess.
+#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SunAngles {
+    /// Sun's azimuth angle in radians.
+    pub sun_azimuth: f32,
+    /// Sun's altitude angle in radians.
+    pub sun_altitude: f32,
+}
+
+impl Default for SunAngles {
+    fn default() -> Self {
+        Self {
+            sun_azimuth: std::f32::consts::PI,
+            sun_altitude: std::f32::consts::PI / 4.0,
+        }
+    }
+}
+
+impl SunAngles {
+    pub fn dir_to_sun(&self) -> glam::Vec3 {
+        let (sin_altitude, cos_altitude) = self.sun_altitude.sin_cos();
+        let (sin_azimuth, cos_azimuth) = self.sun_azimuth.sin_cos();
+        glam::vec3(
+            cos_altitude * cos_azimuth,
+            sin_altitude,
+            cos_altitude * sin_azimuth,
+        )
+    }
+}
+
 pub struct Atmosphere {
     render_pipe_lut_transmittance: RenderPipelineHandle,
     render_pipe_lut_multiple_scattering: RenderPipelineHandle,
@@ -150,17 +188,6 @@ pub struct Atmosphere {
     lut_multiple_scattering: wgpu::TextureView,
     atmosphere_params_buffer: wgpu::Buffer,
     sky_and_sun_lighting_params_buffer: wgpu::Buffer,
-
-    /// Parameters for the atmosphere other than light direction.
-    ///
-    /// GPU uploaded every frame for simplicity.
-    /// (small structs like this don't make a dent perf wise 🤷)
-    pub parameters: AtmosphereParams,
-
-    /// Sun's azimuth angle in radians.
-    pub sun_azimuth: f32,
-    /// Sun's altitude angle in radians.
-    pub sun_altitude: f32,
 }
 
 const LUT_TRANSMITTANCE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
@@ -501,10 +528,6 @@ impl Atmosphere {
             lut_transmittance,
             lut_multiple_scattering,
             atmosphere_params_buffer,
-
-            parameters: AtmosphereParams::default(),
-            sun_azimuth: std::f32::consts::PI,
-            sun_altitude: std::f32::consts::PI / 4.0,
         })
     }
 
@@ -531,27 +554,18 @@ impl Atmosphere {
         &self.sky_and_sun_lighting_params_buffer
     }
 
-    pub fn dir_to_sun(&self) -> glam::Vec3 {
-        let (sin_altitude, cos_altitude) = self.sun_altitude.sin_cos();
-        let (sin_azimuth, cos_azimuth) = self.sun_azimuth.sin_cos();
-        glam::vec3(
-            cos_altitude * cos_azimuth,
-            sin_altitude,
-            cos_altitude * sin_azimuth,
-        )
-    }
-
     pub fn prepare(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut EncoderScope<'_>,
         pipeline_manager: &PipelineManager,
         global_bindings: &GlobalBindings,
+        parameters: &AtmosphereParams,
     ) -> Result<(), PipelineError> {
         queue.write_buffer(
             &self.atmosphere_params_buffer,
             0,
-            bytemuck::bytes_of(&self.parameters),
+            bytemuck::bytes_of(parameters),
         );
 
         let mut encoder = encoder.scope("Prepare atmosphere");

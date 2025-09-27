@@ -7,6 +7,7 @@ mod shaders_embedded;
 
 mod atmosphere;
 mod camera;
+mod config;
 mod egui_minifb;
 mod gui;
 mod primary_depth_buffer;
@@ -39,8 +40,12 @@ use result_ext::ResultExt;
 use terrain::TerrainRenderer;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
+use crate::config::Config;
+
 const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
+
+const CONFIG_FILE_PATH: &str = "config.ron";
 
 struct Application<'a> {
     screen: Screen<'a>,
@@ -68,6 +73,8 @@ struct Application<'a> {
     error_tracker: Arc<ErrorTracker>,
 
     last_gpu_profiler_results: Vec<Vec<wgpu_profiler::GpuTimerQueryResult>>,
+
+    config: Config,
 }
 
 const NUM_PROFILER_RESULTS_TO_KEEP: usize = 10;
@@ -216,6 +223,8 @@ impl Application<'_> {
         )
         .unwrap();
 
+        let config = Config::load_from_ron_file_or_default_and_log_error(CONFIG_FILE_PATH);
+
         Ok(Application {
             screen,
             global_bindings,
@@ -242,6 +251,8 @@ impl Application<'_> {
             error_tracker,
 
             last_gpu_profiler_results: Vec::new(),
+
+            config,
         })
     }
 
@@ -281,19 +292,25 @@ impl Application<'_> {
             self.last_gpu_profiler_results.push(new_profiler_results);
         }
 
+        let config_before = self.config.clone();
+
         let mut mouse_does_ui_interaction = false;
         self.gui.update(&self.window, |egui_ctx| {
             gui::run_gui(
                 egui_ctx,
                 &self.last_gpu_profiler_results,
-                &mut self.atmosphere,
                 &mut self.camera,
                 &mut mouse_does_ui_interaction,
+                &mut self.config,
             );
         });
 
         if !mouse_does_ui_interaction {
             self.camera.update(delta_time, &self.window);
+        }
+
+        if config_before != self.config {
+            self.config.save_to_ron_file_or_log_error(CONFIG_FILE_PATH);
         }
     }
 
@@ -319,7 +336,7 @@ impl Application<'_> {
                 camera_position: self.camera.position.into(),
                 camera_forward: self.camera.forward().into(),
                 tan_half_fov: self.camera.tan_half_fov(aspect_ratio).into(),
-                dir_to_sun: self.atmosphere.dir_to_sun().into(),
+                dir_to_sun: self.config.sun_angles.dir_to_sun().into(),
             },
         );
 
@@ -412,6 +429,7 @@ impl Application<'_> {
                 encoder,
                 &self.pipeline_manager,
                 &self.global_bindings,
+                &self.config.atmosphere_params,
             )
             .ok_or_log("prepare sky");
 
