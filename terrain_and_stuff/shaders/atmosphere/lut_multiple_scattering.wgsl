@@ -66,14 +66,15 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
         let mie_phase_value = mie_phase(cos_theta);
 
         var transmittance = vec3f(1.0);
+        let dt = max_marching_distance_km / f32(MultipleScatteringSteps);
         var t = 0.0;
         const sample_segment_t: f32 = 0.3;
 
         // Loop similar to raymarch.wgsl#raymarch_scattering
         // But we're not marching towards the sun, but along the sample direction.
         for (var i: u32 = 0; i < MultipleScatteringSteps; i += 1) {
-            let t_new = ((f32(i) + sample_segment_t) / f32(MultipleScatteringSteps)) * max_marching_distance_km;
-            let dt = t_new - t;
+            let t_new = (f32(i) + sample_segment_t) * dt;
+            let dt_exact = t_new - t;
             t = t_new;
 
             let new_planet_relative_position_km = sample_ray_planet_km.origin + t * sample_ray_planet_km.direction;
@@ -84,7 +85,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             let sun_cos_zenith_angle = dot(zenith, ray_to_sun_km.direction);
 
             let scattering = scattering_values_for(altitude_km);
-            let sample_transmittance = exp(-dt * scattering.total_extinction_per_km);
+            let sample_transmittance = exp(-dt_exact * scattering.total_extinction_per_km);
 
             // Integrate within each segment.
             // Simplifying scattering by assuming it to be isotropic.

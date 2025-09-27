@@ -62,17 +62,16 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
 
     var luminance = vec3f(0.0);
     var transmittance = vec3f(1.0);
-    var t = 0.0;
-
-    const sample_segment_t: f32 = 0.3;
 
     // TODO: Using a fixed sample count right now, but maybe we should use a dynamic one depending on the distance we're marching?
     // TODO: randomize sample offsets would help a lot here.
-    let inv_sample_count = 1.0 / NumScatteringSteps;
+    let dt = max_marching_distance_km / NumScatteringSteps;
+    var t = 0.0;
+    const sample_segment_t: f32 = 0.3;
 
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
-        let t_new = ((i + sample_segment_t) * inv_sample_count) * max_marching_distance_km;
-        let dt = t_new - t;
+        let t_new = (i + sample_segment_t) * dt;
+        let dt_exact = t_new - t;
         t = t_new;
 
         let new_planet_relative_position_km = planet_relative_position_km + t * direction;
@@ -83,7 +82,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
         let sun_cos_zenith_angle = dot(zenith, dir_to_sun);
 
         let scattering = scattering_values_for(altitude_km);
-        let sample_transmittance = exp(-dt * scattering.total_extinction_per_km);
+        let sample_transmittance = exp(-dt_exact * scattering.total_extinction_per_km);
 
         let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, sun_cos_zenith_angle);
 
