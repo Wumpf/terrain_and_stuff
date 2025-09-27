@@ -126,7 +126,7 @@ impl Application<'_> {
         log::info!("Created wgpu adapter: {:?}", adapter.get_info());
 
         let optional_features = wgpu_profiler::GpuProfiler::ALL_WGPU_TIMER_FEATURES;
-        let required_features = wgpu::Features::DUAL_SOURCE_BLENDING;
+        let required_features = wgpu::FeaturesWebGPU::DUAL_SOURCE_BLENDING;
         let required_limits = wgpu::Limits {
             // Using larger workgroups makes sky SH convolution shader simpler.
             // 1024 is widely supported
@@ -141,7 +141,7 @@ impl Application<'_> {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Device"),
-                required_features: required_features
+                required_features: wgpu::Features::from(required_features)
                     | optional_features.intersection(adapter.features()),
                 // Useful for debugging.
                 //#[cfg(not(target_arch = "wasm32"))]
