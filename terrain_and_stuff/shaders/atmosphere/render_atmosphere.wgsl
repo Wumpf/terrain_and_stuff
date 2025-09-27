@@ -92,7 +92,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
         }
 
         case AtmosphereDebugDrawMode_MultipleScatteringLut: {
-            return FragmentResult(textureSample(lut_multiple_scattering, trilinear_sampler_clamp, texcoord), vec4f(0.0));
+            return FragmentResult(textureSample(lut_multiple_scattering, trilinear_sampler_clamp, texcoord) * 10.0, vec4f(0.0));
         }
 
         default: {

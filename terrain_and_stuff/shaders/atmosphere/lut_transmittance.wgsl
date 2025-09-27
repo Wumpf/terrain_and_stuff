@@ -4,7 +4,7 @@
 // with some parameterization (see `ray_to_sun_texcoord`).
 // The value is the transmittance from that point to sun, through the atmosphere using single scattering only
 
-#import "constants.wgsl"::{ERROR_RGBA, TAU}
+#import "constants.wgsl"::{ERROR_RGBA, TAU, TAU_INV, PI}
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, ScatteringValues}
@@ -17,7 +17,10 @@ const SunTransmittanceSteps: f32 = 40.0;
 // Instead just a custom one I whipped up which I found easier to understand and work with.
 // Simple parameterization: just map y to height from ground and x to cos(zenith angle).
 fn ray_to_sun_texcoord(texcoord: vec2f) -> Ray {
-    let sun_cos_theta = pow(2.0 * texcoord.x - 1.0, 5.0); // pow(x, 5.0) for more precision in the middle.
+    // Need more precision around 0.0.
+    //let sun_cos_theta = 2.0 * texcoord.x - 1.0;
+    let sun_cos_theta = (2.0 / PI) * asin(2.0 * texcoord.x - 1.0);
+
     let sun_theta = acos(sun_cos_theta);
     let height_km = mix(atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km,
                         texcoord.y * texcoord.y); // square for more precision low altitudes
@@ -46,7 +49,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
         t = t_new;
 
         let scattering = scattering_values_for(length(ray_to_sun.origin + t * ray_to_sun.direction) - atmosphere_params.ground_radius_km);
-        transmittance += dt * scattering.total_extinction;
+        transmittance += dt * scattering.total_extinction_per_km;
     }
     transmittance = exp(-transmittance);
 

@@ -46,7 +46,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
                         dir_to_sun: vec3f,
                         geometry_distance_on_camera_ray: f32
                     ) -> ScatteringResult {
-    // Figure out where the ray hits either the planet or the atmosphere end.
+    // Figure out where the ray hits either the planet or the edge of the atmosphere.
     // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
     let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
     let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.atmosphere_radius_km);
@@ -66,8 +66,12 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
 
     const sample_segment_t: f32 = 0.3;
 
+    // TODO: Using a fixed sample count right now, but maybe we should use a dynamic one depending on the distance we're marching?
+    // TODO: randomize sample offsets would help a lot here.
+    let inv_sample_count = 1.0 / NumScatteringSteps;
+
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
-        let t_new = ((i + sample_segment_t) / NumScatteringSteps) * max_marching_distance_km;
+        let t_new = ((i + sample_segment_t) * inv_sample_count) * max_marching_distance_km;
         let dt = t_new - t;
         t = t_new;
 
@@ -79,7 +83,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
         let sun_cos_zenith_angle = dot(zenith, dir_to_sun);
 
         let scattering = scattering_values_for(altitude_km);
-        let sample_transmittance = exp(-dt * scattering.total_extinction);
+        let sample_transmittance = exp(-dt * scattering.total_extinction_per_km);
 
         let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, sun_cos_zenith_angle);
 
@@ -106,7 +110,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
         let inscattering_luminance = atmosphere_params.sun_illuminance * inscattering;
 
         // Integrated scattering within path segment.
-        let scattering_integral = (inscattering_luminance - inscattering_luminance * sample_transmittance) / scattering.total_extinction;
+        let scattering_integral = (inscattering_luminance - inscattering_luminance * sample_transmittance) / scattering.total_extinction_per_km;
 
         luminance += scattering_integral * transmittance;
         transmittance *= sample_transmittance;

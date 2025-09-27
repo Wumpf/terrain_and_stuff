@@ -1,11 +1,11 @@
 #import "global_bindings.wgsl"::{trilinear_sampler_clamp}
-#import "constants.wgsl"::{TAU}
+#import "constants.wgsl"::{TAU, PI}
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 
 struct ScatteringValues {
     rayleigh: vec3f,
     mie: f32,
-    total_extinction: vec3f,
+    total_extinction_per_km: vec3f,
 }
 
 /// Computes rayleigh, mie and extinction values for an altitude in the atmosphere.
@@ -32,7 +32,7 @@ fn scattering_values_for(altitude_km: f32) -> ScatteringValues {
 
     // The amount of light we "loose" on a straight path is called extinction.
     // -> part of the light is absorbed, part of it is scattered!
-    scattering.total_extinction = total_scattering + total_absorption;
+    scattering.total_extinction_per_km = total_scattering + total_absorption;
 
     return scattering;
 }
@@ -57,7 +57,11 @@ fn sample_transmittance_lut(transmittance_lut: texture_2d<f32>, altitude_km: f32
     // u coordinate is mapped to the cos(zenith angle)
     // v coordinate is mapped to the altitude from ground top atmosphere top.
     let relative_altitude = sqrt(altitude_km / (atmosphere_params.atmosphere_radius_km - atmosphere_params.ground_radius_km));
-    let texcoord = vec2f(pow(sun_cos_zenith_angle, 1.0/5.0) * 0.5 + 0.5, relative_altitude);
+
+    //let packed_zenith_angle = sun_cos_zenith_angle * 0.5 + 0.5;
+    let packed_zenith_angle = (0.25 * PI) * sin(sun_cos_zenith_angle) + 0.5;
+
+    let texcoord = vec2f(packed_zenith_angle, relative_altitude);
 
     return textureSampleLevel(transmittance_lut, trilinear_sampler_clamp, texcoord, 0.0).rgb;
 }

@@ -47,7 +47,6 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
     for (var direction_index: u32 = 0; direction_index < DirectionSampleCount; direction_index += 1) {
         // This integral is symmetric about theta = 0 (or theta = PI), so we
         // only need to integrate from zero to PI, not zero to TAU.
-        // TODO: empircically this isn't symmetric. something is wrong.
         // As for the rest: Fibboanci lattice for point sampling on sphere is just magic!
         // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
         let direction_index_f = f32(direction_index);
@@ -85,12 +84,12 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             let sun_cos_zenith_angle = dot(zenith, ray_to_sun_km.direction);
 
             let scattering = scattering_values_for(altitude_km);
-            let sample_transmittance = exp(-dt * scattering.total_extinction);
+            let sample_transmittance = exp(-dt * scattering.total_extinction_per_km);
 
             // Integrate within each segment.
             // Simplifying scattering by assuming it to be isotropic.
             let scattering_no_phase = scattering.rayleigh + scattering.mie;
-            let scattering_f = (scattering_no_phase - scattering_no_phase * sample_transmittance) / scattering.total_extinction;
+            let scattering_f = (scattering_no_phase - scattering_no_phase * sample_transmittance) / scattering.total_extinction_per_km;
             multiple_scattering_factor += transmittance * scattering_f;
 
             // TODO: ShaderToy says:
@@ -103,7 +102,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             let total_in_scattering = (rayleigh_in_scattering + mie_in_scattering) * sun_transmittance;
 
             // Integrated scattering within path segment.
-            let scattering_integral = (total_in_scattering - total_in_scattering * sample_transmittance) / scattering.total_extinction;
+            let scattering_integral = (total_in_scattering - total_in_scattering * sample_transmittance) / scattering.total_extinction_per_km;
 
             second_order_scattering += scattering_integral * transmittance;
             transmittance *= sample_transmittance;
