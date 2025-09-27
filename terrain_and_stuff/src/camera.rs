@@ -44,31 +44,30 @@ impl Camera {
 
         let mouse_pos = window.get_unscaled_mouse_pos(minifb::MouseMode::Discard);
 
-        if window.get_mouse_down(minifb::MouseButton::Left) {
-            if let (Some(current_mouse_pos), Some(last_mouse_pos)) =
+        if window.get_mouse_down(minifb::MouseButton::Left)
+            && let (Some(current_mouse_pos), Some(last_mouse_pos)) =
                 (mouse_pos, self.last_mouse_pos)
-            {
-                let mouse_delta = glam::vec2(
-                    current_mouse_pos.0 - last_mouse_pos.0,
-                    current_mouse_pos.1 - last_mouse_pos.1,
-                ) * 0.01;
+        {
+            let mouse_delta = glam::vec2(
+                current_mouse_pos.0 - last_mouse_pos.0,
+                current_mouse_pos.1 - last_mouse_pos.1,
+            ) * 0.01;
 
-                // Apply change in heading:
-                self.world_from_view_rot =
-                    glam::Quat::from_axis_angle(UP, mouse_delta.x) * self.world_from_view_rot;
+            // Apply change in heading:
+            self.world_from_view_rot =
+                glam::Quat::from_axis_angle(UP, mouse_delta.x) * self.world_from_view_rot;
 
-                // We need to clamp pitch to avoid nadir/zenith singularity:
-                const MAX_PITCH: f32 = 0.99 * 0.25 * std::f32::consts::TAU;
-                let old_pitch = self.forward().dot(UP).clamp(-1.0, 1.0).asin();
-                let new_pitch = (old_pitch - mouse_delta.y).clamp(-MAX_PITCH, MAX_PITCH);
-                let pitch_delta = new_pitch - old_pitch;
+            // We need to clamp pitch to avoid nadir/zenith singularity:
+            const MAX_PITCH: f32 = 0.99 * 0.25 * std::f32::consts::TAU;
+            let old_pitch = self.forward().dot(UP).clamp(-1.0, 1.0).asin();
+            let new_pitch = (old_pitch - mouse_delta.y).clamp(-MAX_PITCH, MAX_PITCH);
+            let pitch_delta = new_pitch - old_pitch;
 
-                // Apply change in pitch:
-                self.world_from_view_rot *= glam::Quat::from_rotation_x(-pitch_delta);
+            // Apply change in pitch:
+            self.world_from_view_rot *= glam::Quat::from_rotation_x(-pitch_delta);
 
-                // Avoid numeric drift:
-                self.world_from_view_rot = self.world_from_view_rot.normalize();
-            }
+            // Avoid numeric drift:
+            self.world_from_view_rot = self.world_from_view_rot.normalize();
         }
         self.last_mouse_pos = mouse_pos;
     }

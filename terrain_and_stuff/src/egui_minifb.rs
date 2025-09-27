@@ -114,9 +114,8 @@ impl EguiMinifb {
 
         let mut modifiers = egui::Modifiers::default();
         for key in window.get_keys() {
-            match map_key(key) {
-                KeyMapResult::Modifier(modifier) => modifiers = modifiers.plus(modifier),
-                _ => {}
+            if let KeyMapResult::Modifier(modifier) = map_key(key) {
+                modifiers = modifiers.plus(modifier)
             }
         }
         for key in window.get_keys_pressed(minifb::KeyRepeat::No) {
@@ -126,7 +125,7 @@ impl EguiMinifb {
                     physical_key: None, // Unimplemented
                     pressed: true,
                     repeat: false, // Let egui handle repeat.
-                    modifiers: modifiers.clone(),
+                    modifiers,
                 });
             }
         }
@@ -137,7 +136,7 @@ impl EguiMinifb {
                     physical_key: None, // Unimplemented
                     pressed: false,
                     repeat: false, // Let egui handle repeat.
-                    modifiers: modifiers.clone(),
+                    modifiers,
                 });
             }
         }

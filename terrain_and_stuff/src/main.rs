@@ -121,7 +121,7 @@ impl Application<'_> {
         log::info!("Created wgpu adapter: {:?}", adapter.get_info());
 
         let optional_features = wgpu_profiler::GpuProfiler::ALL_WGPU_TIMER_FEATURES;
-        let required_features = wgpu::Features::from(wgpu::Features::DUAL_SOURCE_BLENDING);
+        let required_features = wgpu::Features::DUAL_SOURCE_BLENDING;
         let required_limits = wgpu::Limits {
             // Using larger workgroups makes sky SH convolution shader simpler.
             // 1024 is widely supported

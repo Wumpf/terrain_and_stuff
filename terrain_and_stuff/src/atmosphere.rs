@@ -100,7 +100,7 @@ impl Default for AtmosphereParams {
             atmosphere_radius_km: 6460.0,
 
             rayleigh_scale_height: 8.0,
-            rayleigh_scattering_per_km_density: glam::vec3(0.005802, 0.013558, 0.033100).into(),
+            rayleigh_scattering_per_km_density: glam::vec3(0.005802, 0.013558, 0.033100),
 
             mie_scale_height: 1.2,
             mie_scattering_per_km_density: 0.003996,
