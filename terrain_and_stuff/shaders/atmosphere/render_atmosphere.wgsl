@@ -32,12 +32,8 @@ struct FragmentResult {
 }
 
 fn sun_disk_luminance(camera_ray: Ray, dir_to_sun: vec3f) -> vec3f {
-    let sun = dot(camera_ray.direction, dir_to_sun) - cos(atmosphere_params.sun_disk_diameteter_rad);
-    // Since the sun is so bright, this isn't giving us enough antialiasing yet.
-    //let antialiased_sun = saturate(sun / (fwidth(sun) * 100.0));
-    // Fudging this with a looks good enough.
-    let antialiased_sun = saturate(sun / (fwidth(sun) * 100.0));
-    return atmosphere_params.sun_disk_illuminance_factor * sky_and_sun_lighting_params.sun_illuminance * antialiased_sun;
+    let sun = smoothstep(cos(atmosphere_params.sun_disk_diameteter_rad), 1.0, dot(camera_ray.direction, dir_to_sun));
+    return atmosphere_params.sun_disk_illuminance_factor * sky_and_sun_lighting_params.sun_illuminance * sun;
 }
 
 @fragment
@@ -61,7 +57,9 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
         frame_uniforms.dir_to_sun,
         geometry_distance_on_camera_ray
     );
-    result.scattering += sun_disk_luminance(camera_ray, frame_uniforms.dir_to_sun);
+    if depth_buffer_depth == 0.0 {
+        result.scattering += sun_disk_luminance(camera_ray, frame_uniforms.dir_to_sun);
+    }
 
     let fragment_result = FragmentResult(vec4f(result.scattering, 1.0), vec4f(result.transmittance, 1.0));
 
