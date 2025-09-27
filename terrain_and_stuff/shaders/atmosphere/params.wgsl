@@ -13,22 +13,28 @@ struct AtmosphereParams {
 
     rayleigh_scale_height: f32,
     // -- row boundary --
+
     rayleigh_scattering_per_km_density: vec3f,
 
-
     mie_scale_height: f32,
+
     // -- row boundary --
+
     mie_scattering_per_km_density: f32,
     mie_absorption_per_km_density: f32,
 
     sun_disk_diameteter_rad: f32,
     sun_disk_illuminance_factor: f32,
+
     // -- row boundary --
 
     ozone_absorption_per_km_density: vec3f,
+    enable_multiple_scattering: u32,
+
     // -- row boundary --
 
     sun_illuminance: vec3f,
+
     // -- row boundary --
 
     ground_albedo: vec3f,

@@ -82,7 +82,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
         let sample_transmittance = exp(-dt * scattering.total_extinction);
 
         let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, sun_cos_zenith_angle);
-        let multiscattered_luminance = sample_multiple_scattering_lut(multiple_scattering_lut, altitude_km, sun_cos_zenith_angle);
+
 
         // TODO: earth shadow at night?
         // https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/Resources/RenderSkyRayMarching.hlsl#L181
@@ -94,10 +94,15 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
         let shadow = 1.0;
 
         // Compute amount of light coming in via scattering.
-        // Note that multi-scattering is unaffected by shadows (approximating it coming from distant sources).
         let phase_times_scattering = scattering.mie * mie_phase + scattering.rayleigh * rayleigh_phase;
-        let inscattering = planet_shadow * shadow * sun_transmittance * phase_times_scattering +
-                                multiscattered_luminance * (scattering.rayleigh + scattering.mie);
+        var inscattering = planet_shadow * shadow * sun_transmittance * phase_times_scattering;
+
+        if atmosphere_params.enable_multiple_scattering != 0 {
+             // Multi-scattering is unaffected by shadows (approximating it coming from distant sources).
+            let multiscattered_luminance = sample_multiple_scattering_lut(multiple_scattering_lut, altitude_km, sun_cos_zenith_angle);
+            inscattering += multiscattered_luminance * (scattering.rayleigh + scattering.mie);
+        }
+
         let inscattering_luminance = atmosphere_params.sun_illuminance * inscattering;
 
         // Integrated scattering within path segment.

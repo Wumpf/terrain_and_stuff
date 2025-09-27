@@ -59,6 +59,19 @@ pub fn drag_angle(ui: &mut egui::Ui, radians: &mut f32) -> egui::Response {
     response
 }
 
+pub fn row_with_default<T: Copy, R>(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut T,
+    default: T,
+    f: impl FnOnce(&mut egui::Ui, &mut T) -> R,
+) -> egui::InnerResponse<R> {
+    ui.label(label);
+    let response = with_default(ui, value, default, f);
+    ui.end_row();
+    response
+}
+
 pub fn with_default<T: Copy, R>(
     ui: &mut egui::Ui,
     value: &mut T,

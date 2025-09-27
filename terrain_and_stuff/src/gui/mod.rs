@@ -6,11 +6,11 @@ use egui::Widget as _;
 use crate::{
     atmosphere::{AtmosphereDebugDrawMode, AtmosphereParams, SunAngles},
     config::Config,
+    gui::ui_elements::row_with_default,
 };
 
 use ui_elements::{
     drag_angle, drag_value_f32_precise_positive, drag_value_vec3, drag_value_vec3_precise_positive,
-    with_default,
 };
 
 pub fn run_gui(
@@ -78,6 +78,7 @@ fn atmosphere_settings(
         sun_disk_diameteter_rad,
         sun_disk_illuminance_factor,
         ozone_absorption_per_km_density,
+        enable_multiple_scattering,
         sun_illuminance,
         ground_albedo,
     } = atmosphere_params;
@@ -118,9 +119,9 @@ fn atmosphere_settings(
         .default_open(false)
         .show(ui, |ui| {
             egui::Grid::new("advanced_atmosphere").show(ui, |ui| {
-                ui.label("Ground radius (km)");
-                with_default(
+                row_with_default(
                     ui,
+                    "Ground radius (km)",
                     ground_radius_km,
                     default_params.ground_radius_km,
                     |ui, v| {
@@ -129,9 +130,9 @@ fn atmosphere_settings(
                 );
                 ui.end_row();
 
-                ui.label("Atmosphere radius (km)");
-                with_default(
+                row_with_default(
                     ui,
+                    "Atmosphere radius (km)",
                     atmosphere_radius_km,
                     default_params.atmosphere_radius_km,
                     |ui, v| {
@@ -143,93 +144,99 @@ fn atmosphere_settings(
                 ui.separator();
                 ui.end_row();
 
-                ui.label("Sun illuminance");
-                with_default(
+                row_with_default(
                     ui,
+                    "Sun illuminance",
                     sun_illuminance,
                     default_params.sun_illuminance,
                     drag_value_vec3_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Sun disk diameter");
-                with_default(
+                row_with_default(
                     ui,
+                    "Sun disk diameter",
                     sun_disk_diameteter_rad,
                     default_params.sun_disk_diameteter_rad,
                     egui::Ui::drag_angle,
                 );
-                ui.end_row();
 
-                ui.label("Sun disk illuminance factor");
-                with_default(
+                row_with_default(
                     ui,
+                    "Sun disk illuminance factor",
                     sun_disk_illuminance_factor,
                     default_params.sun_disk_illuminance_factor,
                     drag_value_f32_precise_positive,
                 );
-                ui.end_row();
 
                 ui.separator();
                 ui.end_row();
 
-                ui.label("Rayleigh scale height");
-                with_default(
+                row_with_default(
                     ui,
+                    "Enable multiple scattering",
+                    enable_multiple_scattering,
+                    default_params.enable_multiple_scattering,
+                    |ui, v| {
+                        let mut as_bool = (*v).into();
+                        ui.checkbox(&mut as_bool, "");
+                        *v = as_bool.into();
+                    },
+                );
+
+                ui.separator();
+                ui.end_row();
+
+                row_with_default(
+                    ui,
+                    "Rayleigh scale height",
                     rayleigh_scale_height,
                     default_params.rayleigh_scale_height,
                     drag_value_f32_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Rayleigh scattering density/km");
-                with_default(
+                row_with_default(
                     ui,
+                    "Rayleigh scattering density/km",
                     rayleigh_scattering_per_km_density,
                     default_params.rayleigh_scattering_per_km_density,
                     drag_value_vec3_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Mie scale height");
-                with_default(
+                row_with_default(
                     ui,
+                    "Mie scale height",
                     mie_scale_height,
                     default_params.mie_scale_height,
                     drag_value_f32_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Mie scattering density/km");
-                with_default(
+                row_with_default(
                     ui,
+                    "Mie scattering density/km",
                     mie_scattering_per_km_density,
                     default_params.mie_scattering_per_km_density,
                     drag_value_f32_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Mie absorption density/km");
-                with_default(
+                row_with_default(
                     ui,
+                    "Mie absorption density/km",
                     mie_absorption_per_km_density,
                     default_params.mie_absorption_per_km_density,
                     drag_value_f32_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Ozone absorption density/km");
-                with_default(
+                row_with_default(
                     ui,
+                    "Ozone absorption density/km",
                     ozone_absorption_per_km_density,
                     default_params.ozone_absorption_per_km_density,
                     drag_value_vec3_precise_positive,
                 );
-                ui.end_row();
 
-                ui.label("Ground albedo");
-                with_default(
+                row_with_default(
                     ui,
+                    "Ground albedo",
                     ground_albedo,
                     default_params.ground_albedo,
                     drag_value_vec3_precise_positive,

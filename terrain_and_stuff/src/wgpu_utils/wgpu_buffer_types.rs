@@ -411,3 +411,26 @@ impl<'de, T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static + serde::
         T::deserialize(deserializer).map(|value| Self::new(value))
     }
 }
+
+#[repr(C, align(4))]
+#[derive(Clone, Copy, Zeroable, Pod, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(into = "bool", from = "bool")]
+pub struct BoolAsInteger {
+    pub v: u32,
+}
+
+impl From<bool> for BoolAsInteger {
+    #[inline]
+    fn from(v: bool) -> Self {
+        Self {
+            v: if v { 1 } else { 0 },
+        }
+    }
+}
+
+impl From<BoolAsInteger> for bool {
+    #[inline]
+    fn from(v: BoolAsInteger) -> Self {
+        v.v != 0
+    }
+}

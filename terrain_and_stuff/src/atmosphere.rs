@@ -12,7 +12,7 @@ use crate::{
     },
     wgpu_utils::{
         BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc,
-        wgpu_buffer_types::{Vec3RowPadded, WgslEnum},
+        wgpu_buffer_types::{BoolAsInteger, Vec3RowPadded, WgslEnum},
     },
 };
 
@@ -90,7 +90,8 @@ pub struct AtmosphereParams {
     // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
     pub sun_disk_illuminance_factor: f32,
     // -- row boundary --
-    pub ozone_absorption_per_km_density: Vec3RowPadded,
+    pub ozone_absorption_per_km_density: glam::Vec3,
+    pub enable_multiple_scattering: BoolAsInteger,
     // -- row boundary --
     pub sun_illuminance: Vec3RowPadded,
     // -- row boundary --
@@ -114,7 +115,8 @@ impl Default for AtmosphereParams {
             mie_scattering_per_km_density: 0.003996,
             mie_absorption_per_km_density: 0.004440,
 
-            ozone_absorption_per_km_density: glam::vec3(0.000650, 0.001881, 0.000085).into(),
+            ozone_absorption_per_km_density: glam::vec3(0.000650, 0.001881, 0.000085),
+            enable_multiple_scattering: true.into(),
 
             // Roughly the intensity Sun without any scattering
             // https://en.wikipedia.org/wiki/Luminance
@@ -606,7 +608,8 @@ impl Atmosphere {
             );
             render_pass.draw(0..3, 0..1);
         }
-        {
+
+        if parameters.enable_multiple_scattering.into() {
             let mut render_pass = encoder.scoped_render_pass(
                 "Multiple scattering LUT",
                 wgpu::RenderPassDescriptor {

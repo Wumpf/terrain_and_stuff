@@ -47,6 +47,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
     for (var direction_index: u32 = 0; direction_index < DirectionSampleCount; direction_index += 1) {
         // This integral is symmetric about theta = 0 (or theta = PI), so we
         // only need to integrate from zero to PI, not zero to TAU.
+        // TODO: empircically this isn't symmetric. something is wrong.
         // As for the rest: Fibboanci lattice for point sampling on sphere is just magic!
         // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
         let direction_index_f = f32(direction_index);
