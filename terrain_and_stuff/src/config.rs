@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use crate::atmosphere::{AtmosphereParams, SunAngles};
+use crate::{
+    atmosphere::{AtmosphereParams, SunAngles},
+    camera::Camera,
+};
 
 /// Config file that allows to store all relevant application state into a single file.
 ///
@@ -10,6 +13,7 @@ use crate::atmosphere::{AtmosphereParams, SunAngles};
 pub struct Config {
     pub sun_angles: SunAngles,
     pub atmosphere_params: AtmosphereParams,
+    pub camera: Camera,
 }
 
 impl Config {

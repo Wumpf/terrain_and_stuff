@@ -1,24 +1,28 @@
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Camera {
     pub position: glam::Vec3,
     pub world_from_view_rot: glam::Quat,
-    pub movement_speed: f32,
+    pub base_movement_speed: f32,
 
+    #[serde(skip)]
     last_mouse_pos: Option<(f32, f32)>,
 }
 
 const FOV_RADIANS: f32 = 45.0 / std::f32::consts::TAU;
 const UP: glam::Vec3 = glam::Vec3::Y;
 
-impl Camera {
-    pub fn new() -> Self {
+impl Default for Camera {
+    fn default() -> Self {
         Self {
             position: glam::vec3(0.0, 0.0, 0.0),
             world_from_view_rot: glam::Quat::IDENTITY,
             last_mouse_pos: None,
-            movement_speed: 100.0,
+            base_movement_speed: 100.0,
         }
     }
+}
 
+impl Camera {
     pub fn update(&mut self, delta_time: f32, window: &minifb::Window) {
         // X=right, Y=up, Z=back
         let mut local_movement = glam::Vec3::ZERO;
@@ -30,7 +34,7 @@ impl Camera {
         local_movement.y += window.is_key_down(minifb::Key::E) as i32 as f32;
         local_movement = local_movement.normalize_or_zero();
 
-        let mut speed = self.movement_speed;
+        let mut speed = self.base_movement_speed;
         if window.is_key_down(minifb::Key::LeftShift) {
             speed *= 10.0;
         } else if window.is_key_down(minifb::Key::LeftCtrl) {

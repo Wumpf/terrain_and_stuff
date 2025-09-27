@@ -5,7 +5,6 @@ use egui::Widget as _;
 
 use crate::{
     atmosphere::{AtmosphereDebugDrawMode, AtmosphereParams, SunAngles},
-    camera::Camera,
     config::Config,
 };
 
@@ -17,7 +16,6 @@ use ui_elements::{
 pub fn run_gui(
     egui_ctx: &egui::Context,
     last_gpu_profiler_results: &[Vec<wgpu_profiler::GpuTimerQueryResult>],
-    camera: &mut Camera,
     uses_cursor: &mut bool,
     config: &mut Config,
 ) {
@@ -37,11 +35,11 @@ pub fn run_gui(
             .show(ui, |ui| {
                 egui::Grid::new("camera").show(ui, |ui| {
                     ui.label("Position ");
-                    drag_value_vec3(ui, &mut camera.position);
+                    drag_value_vec3(ui, &mut config.camera.position);
                     ui.end_row();
 
                     ui.label("Speed: ");
-                    egui::DragValue::new(&mut camera.movement_speed).ui(ui);
+                    egui::DragValue::new(&mut config.camera.base_movement_speed).ui(ui);
                     ui.end_row();
                 });
             });

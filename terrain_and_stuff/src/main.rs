@@ -32,7 +32,6 @@ use std::sync::{Arc, atomic::AtomicU64};
 use web_time::Instant;
 
 use atmosphere::Atmosphere;
-use camera::Camera;
 use primary_depth_buffer::PrimaryDepthBuffer;
 use render_output::{HdrBackbuffer, Screen};
 use resource_managers::{GlobalBindings, PipelineManager};
@@ -64,7 +63,6 @@ struct Application<'a> {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    camera: Camera,
     last_update: Instant,
 
     active_frame_index: u64,
@@ -242,7 +240,6 @@ impl Application<'_> {
             adapter,
             device,
             queue,
-            camera: Camera::new(),
             last_update: Instant::now(),
 
             active_frame_index: 0,
@@ -299,17 +296,20 @@ impl Application<'_> {
             gui::run_gui(
                 egui_ctx,
                 &self.last_gpu_profiler_results,
-                &mut self.camera,
                 &mut mouse_does_ui_interaction,
                 &mut self.config,
             );
         });
 
         if !mouse_does_ui_interaction {
-            self.camera.update(delta_time, &self.window);
+            self.config.camera.update(delta_time, &self.window);
         }
 
-        if config_before != self.config {
+        // Save if config changed and mouse & keyboard keys aren't down right now (which is associated with camera movement)
+        if config_before != self.config
+            && !self.window.get_mouse_down(minifb::MouseButton::Left)
+            && self.window.get_keys().is_empty()
+        {
             self.config.save_to_ron_file_or_log_error(CONFIG_FILE_PATH);
         }
     }
@@ -324,18 +324,20 @@ impl Application<'_> {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        let camera = &self.config.camera;
+
         let aspect_ratio = self.screen.aspect_ratio();
-        let view_from_world = self.camera.view_from_world();
-        let projection_from_view = self.camera.projection_from_view(aspect_ratio);
+        let view_from_world = camera.view_from_world();
+        let projection_from_view = camera.projection_from_view(aspect_ratio);
         self.global_bindings.update_frame_uniform_buffer(
             &self.queue,
             &resource_managers::FrameUniformBuffer {
                 view_from_world: view_from_world.into(),
                 projection_from_view: projection_from_view.into(),
                 projection_from_world: (projection_from_view * view_from_world).into(),
-                camera_position: self.camera.position.into(),
-                camera_forward: self.camera.forward().into(),
-                tan_half_fov: self.camera.tan_half_fov(aspect_ratio).into(),
+                camera_position: camera.position.into(),
+                camera_forward: camera.forward().into(),
+                tan_half_fov: camera.tan_half_fov(aspect_ratio).into(),
                 dir_to_sun: self.config.sun_angles.dir_to_sun().into(),
             },
         );
