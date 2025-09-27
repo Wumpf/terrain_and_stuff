@@ -37,6 +37,28 @@ pub fn drag_value_f32_precise_positive(ui: &mut egui::Ui, v: &mut f32) {
     );
 }
 
+/// Modify an angle. The given angle should be in radians, but is shown to the user in degrees.
+/// The angle is NOT wrapped, so the user may select, for instance 720° = 2𝞃 = 4π
+///
+/// Adjusted version from egui for different speed & decimals.
+pub fn drag_angle(ui: &mut egui::Ui, radians: &mut f32) -> egui::Response {
+    let mut degrees = radians.to_degrees();
+    let mut response = ui.add(
+        egui::DragValue::new(&mut degrees)
+            .fixed_decimals(1)
+            .speed(0.1)
+            .suffix("°"),
+    );
+
+    // only touch `*radians` if we actually changed the degree value
+    if degrees != radians.to_degrees() {
+        *radians = degrees.to_radians();
+        response.mark_changed();
+    }
+
+    response
+}
+
 pub fn with_default<T: Copy, R>(
     ui: &mut egui::Ui,
     value: &mut T,

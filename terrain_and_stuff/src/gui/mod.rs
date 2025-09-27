@@ -9,7 +9,7 @@ use crate::{
 };
 
 use ui_elements::{
-    drag_value_f32_precise_positive, drag_value_vec3, drag_value_vec3_precise_positive,
+    drag_angle, drag_value_f32_precise_positive, drag_value_vec3, drag_value_vec3_precise_positive,
     with_default,
 };
 
@@ -79,11 +79,11 @@ fn atmosphere_settings(ui: &mut egui::Ui, atmosphere: &mut Atmosphere) {
 
     egui::Grid::new("atmosphere_grid").show(ui, |ui| {
         ui.label("Sun azimuth");
-        ui.drag_angle(&mut atmosphere.sun_azimuth);
+        drag_angle(ui, &mut atmosphere.sun_azimuth);
         ui.end_row();
 
         ui.label("Sun altitude");
-        ui.drag_angle(&mut atmosphere.sun_altitude);
+        drag_angle(ui, &mut atmosphere.sun_altitude);
         ui.end_row();
 
         let mut draw_mode_enum = draw_mode.get();
