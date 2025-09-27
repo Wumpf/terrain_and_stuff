@@ -128,7 +128,6 @@ fn atmosphere_settings(
                         ui.add(egui::DragValue::new(v));
                     },
                 );
-                ui.end_row();
 
                 row_with_default(
                     ui,
@@ -139,7 +138,6 @@ fn atmosphere_settings(
                         ui.add(egui::DragValue::new(v));
                     },
                 );
-                ui.end_row();
 
                 ui.separator();
                 ui.end_row();
