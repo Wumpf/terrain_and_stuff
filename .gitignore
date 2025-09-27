@@ -2,3 +2,7 @@
 
 # Generated files:
 terrain_and_stuff/src/shaders_embedded.rs
+
+# Not checking in local config file for now.
+# Maybe I'll do presets in the future.
+config.ron
