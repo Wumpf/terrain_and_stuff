@@ -8,7 +8,7 @@ mod shaders_embedded;
 mod atmosphere;
 mod camera;
 mod egui_minifb;
-mod gui_window;
+mod gui;
 mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
@@ -283,7 +283,7 @@ impl Application<'_> {
 
         let mut mouse_does_ui_interaction = false;
         self.gui.update(&self.window, |egui_ctx| {
-            gui_window::run_gui(
+            gui::run_gui(
                 egui_ctx,
                 &self.last_gpu_profiler_results,
                 &mut self.atmosphere,
