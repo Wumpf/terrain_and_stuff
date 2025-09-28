@@ -14,7 +14,6 @@ mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
 mod result_ext;
-mod sampling;
 mod terrain;
 mod wgpu_error_handling;
 mod wgpu_utils;

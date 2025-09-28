@@ -17,6 +17,7 @@
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
 #import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
+#import "sampling.wgsl"::{uniform_sampled_sphere_direction}
 
 // naga_oil doesn't support override constants :(
 //override NUM_SAMPLES: u32;
@@ -25,8 +26,7 @@ const SAMPLE_NORMALIZATION_FACTOR: f32 = (1.0 / f32(NUM_SAMPLES)) * (2.0 * TAU);
 
 @group(2) @binding(0) var transmittance_lut: texture_2d<f32>;
 @group(2) @binding(1) var multiple_scattering_lut: texture_2d<f32>;
-@group(2) @binding(2) var<storage, read> sampling_directions: array<vec3f>;
-@group(2) @binding(3) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
+@group(2) @binding(2) var<storage, read_write> sky_and_sun_lighting_params: SkyAndSunLightingParams;
 
 var<workgroup> shared_buffer: array<vec3f, NUM_SAMPLES>;
 
@@ -51,11 +51,7 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
 
 @compute @workgroup_size(NUM_SAMPLES) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let sample_index = id.x;
-    // TODO: Just learned about Fibbonaci lattice
-    // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
-    // Using this over on `lut_multiple_scattering.wgsl`. Should use that here as well.
-    // Throw out halton sequence stuff again.
-    let direction = sampling_directions[sample_index];
+    let direction = uniform_sampled_sphere_direction(sample_index, NUM_SAMPLES);
 
     let planet_relative_position_km = vec3f(0.0, atmosphere_params.ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
     let max_marching_distance_km = 999999999999.0;

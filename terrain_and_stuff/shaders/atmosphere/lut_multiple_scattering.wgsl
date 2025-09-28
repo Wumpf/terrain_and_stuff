@@ -4,10 +4,11 @@
 // The value is the isotropic multiple scattering contribution to the overall luminance.
 // It is a transfer function transferring illuminance to its multiple scattering contribution as luminance.
 
-#import "constants.wgsl"::{ERROR_RGBA, PI, GOLDEN_RATIO}
+#import "constants.wgsl"::{ERROR_RGBA, PI}
 #import "intersections.wgsl"::{ray_sphere_intersect, Ray}
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
+#import "sampling.wgsl"::{uniform_sampled_sphere_direction}
 
 const DirectionSampleCount: u32 = 256;
 const MultipleScatteringSteps: u32 = 20;
@@ -44,13 +45,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
     // Iterate over sphere samples.
     for (var direction_index: u32 = 0; direction_index < DirectionSampleCount; direction_index += 1) {
-        // Fibboanci lattice for point sampling on sphere is just magic!
-        // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
-        let direction_index_f = f32(direction_index);
-        let theta = 2.0 * PI * direction_index_f / GOLDEN_RATIO;
-        let phi = acos(1.0 - 2.0 * (direction_index_f + 0.5) / f32(DirectionSampleCount));
-
-        let sample_dir = spherical_dir(phi, theta);
+        let sample_dir = uniform_sampled_sphere_direction(direction_index, DirectionSampleCount);
         let sample_ray_planet_km = Ray(ray_to_sun_km.origin, sample_dir);
 
         let atmosphere_distance_km = ray_sphere_intersect(sample_ray_planet_km, atmosphere_params.atmosphere_radius_km);

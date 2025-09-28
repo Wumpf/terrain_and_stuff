@@ -204,8 +204,6 @@ const LUT_MULTIPLE_SCATTERING_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     depth_or_array_layers: 1,
 };
 
-const NUM_SH_SAMPLES: u32 = 1024;
-
 impl Atmosphere {
     pub fn new(
         device: &wgpu::Device,
@@ -442,14 +440,6 @@ impl Atmosphere {
 
         // Compute pipeline for computing SH coefficients.
         let (compute_pipe_sh, compute_sh_bind_group) = {
-            let sampling_directions = generate_sampling_directions(NUM_SH_SAMPLES);
-            let sampling_directions_buffer =
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Sampling directions"),
-                    contents: bytemuck::cast_slice(sampling_directions.as_slice()),
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
-
             let bindings = BindGroupLayoutBuilder::new()
                 // [in] transmittance lut
                 .next_binding_compute(wgpu::BindingType::Texture {
@@ -462,12 +452,6 @@ impl Atmosphere {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
-                })
-                // [in] sampling directions
-                .next_binding_compute(wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(sampling_directions_buffer.size()),
                 })
                 // [out] sun color + sh coefficients
                 .next_binding_compute(wgpu::BindingType::Buffer {
@@ -505,7 +489,6 @@ impl Atmosphere {
             let compute_sh_bind_group = BindGroupBuilder::new(&bindings)
                 .texture(&lut_transmittance)
                 .texture(&lut_multiple_scattering)
-                .buffer(sampling_directions_buffer.as_entire_buffer_binding())
                 .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
                 .create(device, "atmosphere/compute_sh");
 
@@ -658,21 +641,4 @@ impl Atmosphere {
 
         Ok(())
     }
-}
-
-fn generate_sampling_directions(num_samples: u32) -> Vec<Vec3RowPadded> {
-    use crate::sampling::halton;
-
-    (0..num_samples)
-        .map(|i| {
-            let z = halton(i, 2) * 2.0 - 1.0;
-            let t = halton(i, 3) * std::f32::consts::TAU;
-            let r = (1.0 - z * z).sqrt();
-
-            let x = r * t.cos();
-            let y = r * t.sin();
-
-            glam::vec3(x, y, z).into()
-        })
-        .collect()
 }
