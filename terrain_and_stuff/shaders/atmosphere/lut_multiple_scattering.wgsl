@@ -9,7 +9,7 @@
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
 
-const DirectionSampleCount: u32 = 64;
+const DirectionSampleCount: u32 = 256;
 const MultipleScatteringSteps: u32 = 20;
 
 @group(2) @binding(0) var lut_transmittance: texture_2d<f32>;
@@ -17,10 +17,9 @@ const MultipleScatteringSteps: u32 = 20;
 fn ray_to_sun_texcoord(texcoord: vec2f) -> Ray {
     let sun_cos_theta = 2.0 * texcoord.x - 1.0;
     let sun_theta = acos(sun_cos_theta);
-    let height_km = mix(atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km,
-                        texcoord.y);
+    let height_km = mix(atmosphere_params.ground_radius_km, atmosphere_params.atmosphere_radius_km, texcoord.y);
     let planet_relative_pos = vec3f(0.0, height_km, 0.0);
-    let dir_to_sun = normalize(vec3f(0.0, sun_cos_theta, -sin(sun_theta)));
+    let dir_to_sun = vec3f(0.0, sun_cos_theta, -sin(sun_theta));
 
     return Ray(planet_relative_pos, dir_to_sun);
 }
@@ -45,12 +44,10 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
     // Iterate over sphere samples.
     for (var direction_index: u32 = 0; direction_index < DirectionSampleCount; direction_index += 1) {
-        // This integral is symmetric about theta = 0 (or theta = PI), so we
-        // only need to integrate from zero to PI, not zero to TAU.
-        // As for the rest: Fibboanci lattice for point sampling on sphere is just magic!
+        // Fibboanci lattice for point sampling on sphere is just magic!
         // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
         let direction_index_f = f32(direction_index);
-        let theta = PI * direction_index_f / GOLDEN_RATIO;
+        let theta = 2.0 * PI * direction_index_f / GOLDEN_RATIO;
         let phi = acos(1.0 - 2.0 * (direction_index_f + 0.5) / f32(DirectionSampleCount));
 
         let sample_dir = spherical_dir(phi, theta);
@@ -79,8 +76,7 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
 
             let new_planet_relative_position_km = sample_ray_planet_km.origin + t * sample_ray_planet_km.direction;
             let sample_height = length(new_planet_relative_position_km);
-            let altitude_km = clamp(sample_height, atmosphere_params.ground_radius_km,
-                                    atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
+            let altitude_km = max(0.0, sample_height - atmosphere_params.ground_radius_km);
             let zenith = new_planet_relative_position_km / sample_height;
             let sun_cos_zenith_angle = dot(zenith, ray_to_sun_km.direction);
 
@@ -93,9 +89,6 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             let scattering_f = (scattering_no_phase - scattering_no_phase * sample_transmittance) / scattering.total_extinction_per_km;
             multiple_scattering_factor += transmittance * scattering_f;
 
-            // TODO: ShaderToy says:
-            // This is slightly different from the paper, but I think the paper has a mistake?
-            // In equation (6), I think S(x,w_s) should be S(x-tv,w_s).
             let sun_transmittance = sample_transmittance_lut(lut_transmittance, altitude_km, sun_cos_zenith_angle);
 
             let rayleigh_in_scattering = scattering.rayleigh * rayleigh_phase_value;
@@ -109,15 +102,11 @@ fn fs_main(@location(0) texcoord: vec2f) -> @location(0) vec4<f32> {
             transmittance *= sample_transmittance;
         }
 
-        // TODO: something is wrong with the transmittance at this point - it's "streaky" across the lut!
-
         // If we hit the ground, add the ground albedo to the luminance.
-        if ground_distance_km > 0.0 && max_marching_distance_km == ground_distance_km {
+        if ground_distance_km > 0.0 {
             let new_planet_relative_position_km = sample_ray_planet_km.origin + max_marching_distance_km * sample_ray_planet_km.direction;
-            let sample_height = length(new_planet_relative_position_km);
-            let altitude_km = clamp(sample_height, atmosphere_params.ground_radius_km,
-                                    atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
-            let zenith = new_planet_relative_position_km / sample_height;
+            let altitude_km = 0.0;
+            let zenith = normalize(new_planet_relative_position_km);
             let sun_cos_zenith_angle = dot(zenith, ray_to_sun_km.direction);
 
             let sun_transmittance_at_ground = sample_transmittance_lut(lut_transmittance, altitude_km, sun_cos_zenith_angle);
