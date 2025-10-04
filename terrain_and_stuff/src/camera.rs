@@ -23,7 +23,7 @@ impl Default for Camera {
 }
 
 impl Camera {
-    pub fn update(&mut self, delta_time: f32, window: &minifb::Window) {
+    pub fn update(&mut self, delta_time: std::time::Duration, window: &minifb::Window) {
         // X=right, Y=up, Z=back
         let mut local_movement = glam::Vec3::ZERO;
         local_movement.z += window.is_key_down(minifb::Key::W) as i32 as f32;
@@ -44,7 +44,7 @@ impl Camera {
         }
 
         let world_movement = self.world_from_view_rot * (speed * local_movement);
-        self.position += world_movement * delta_time;
+        self.position += world_movement * delta_time.as_secs_f32();
 
         let mouse_pos = window.get_unscaled_mouse_pos(minifb::MouseMode::Discard);
 

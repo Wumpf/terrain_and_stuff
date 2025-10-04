@@ -254,7 +254,19 @@ impl Application<'_> {
 
     pub fn update(&mut self) {
         let current_time = Instant::now();
-        let delta_time = current_time.duration_since(self.last_update).as_secs_f32();
+        let delta_time = current_time.duration_since(self.last_update);
+
+        // Very crude FPS limiter:
+        let delta_time = if let Some(target_fps) = self.config.target_fps {
+            let target_delta_time = std::time::Duration::from_secs_f32(1.0 / target_fps as f32);
+            if let Some(sleep_time) = target_delta_time.checked_sub(delta_time) {
+                std::thread::sleep(sleep_time);
+            }
+            target_delta_time
+        } else {
+            delta_time
+        };
+
         self.last_update = current_time;
 
         self.active_frame_index += 1;

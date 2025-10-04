@@ -14,6 +14,8 @@ pub struct Config {
     pub sun_angles: SunAngles,
     pub atmosphere_params: AtmosphereParams,
     pub camera: Camera,
+
+    pub target_fps: Option<u32>,
 }
 
 impl Config {
