@@ -39,6 +39,23 @@ fn sample_multiple_scattering_lut(multiple_scattering_lut: texture_2d<f32>,
     return textureSampleLevel(multiple_scattering_lut, trilinear_sampler_clamp, texcoord, 0.0).xyz;
 }
 
+fn max_marching_distance_km(ray_to_sun_km: Ray, geometry_distance_on_camera_ray: f32) -> f32 {
+    // Figure out where the ray hits either the planet or the edge of the atmosphere.
+    // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
+
+    var atmosphere_or_ground_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.atmosphere_radius_km);
+
+    let inside_planet = dot(ray_to_sun_km.origin, ray_to_sun_km.direction) <= atmosphere_params.ground_radius_km * atmosphere_params.ground_radius_km;
+    if !inside_planet {
+        let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.ground_radius_km);
+        if ground_distance_km > 0.0 {
+            atmosphere_or_ground_distance_km = ground_distance_km;
+        }
+    }
+
+    return min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
+}
+
 fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
                         multiple_scattering_lut: texture_2d<f32>,
                         direction: vec3f,
@@ -46,14 +63,9 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
                         dir_to_sun: vec3f,
                         geometry_distance_on_camera_ray: f32
                     ) -> ScatteringResult {
-    // Figure out where the ray hits either the planet or the edge of the atmosphere.
-    // From that we can compute the maximum marching distance in our "regular flat-lander" coordinate system.
-    let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
-    let atmosphere_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.atmosphere_radius_km);
-    let ground_distance_km = ray_sphere_intersect(ray_to_sun_km, atmosphere_params.ground_radius_km);
-    let atmosphere_or_ground_distance_km = select(ground_distance_km, atmosphere_distance_km, ground_distance_km < 0.0);
-    let max_marching_distance_km = min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 
+    let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
+    let max_marching_distance_km = max_marching_distance_km(ray_to_sun_km, geometry_distance_on_camera_ray);
 
     let cos_theta = dot(direction, dir_to_sun);
 

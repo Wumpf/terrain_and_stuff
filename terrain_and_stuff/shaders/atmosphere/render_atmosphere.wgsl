@@ -47,7 +47,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
 
     // For our camera we generally assume a flat planet.
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
-    let planet_relative_position_km = vec3(0.0, max(0.0, camera_ray.origin.y * 0.001) + atmosphere_params.ground_radius_km, 0.0);
+    let planet_relative_position_km = vec3(0.0, camera_ray.origin.y * 0.001 + atmosphere_params.ground_radius_km, 0.0);
 
     var result = raymarch_scattering(
         lut_transmittance,
