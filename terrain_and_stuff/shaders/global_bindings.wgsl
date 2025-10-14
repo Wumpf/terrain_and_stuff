@@ -22,11 +22,14 @@ struct FrameUniformBuffer {
 var<uniform> frame_uniforms: FrameUniformBuffer;
 
 @group(0) @binding(1)
-var nearest_sampler_clamp: sampler;
+var bluenoise: texture_2d<f32>;
+
 @group(0) @binding(2)
+var nearest_sampler_clamp: sampler;
+@group(0) @binding(3)
 var nearest_sampler_repeat: sampler;
 
-@group(0) @binding(3)
-var trilinear_sampler_clamp: sampler;
 @group(0) @binding(4)
+var trilinear_sampler_clamp: sampler;
+@group(0) @binding(5)
 var trilinear_sampler_repeat: sampler;

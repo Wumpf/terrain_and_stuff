@@ -4,7 +4,7 @@ enable dual_source_blending;
 
 #import "constants.wgsl"::{ERROR_RGBA}
 #import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
-#import "global_bindings.wgsl"::{frame_uniforms, trilinear_sampler_clamp}
+#import "global_bindings.wgsl"::{bluenoise, frame_uniforms, nearest_sampler_repeat, trilinear_sampler_clamp}
 #import "intersections.wgsl"::{Ray}
 #import "sh.wgsl"::{evaluate_sh2} // For debugging only.
 
@@ -49,7 +49,12 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
     let planet_relative_position_km = vec3(0.0, camera_ray.origin.y * 0.001 + atmosphere_params.ground_radius_km, 0.0);
 
+    // Randomize ray offset.
+    let bluenoise_texcoord = vec2f(position.xy) / vec2f(textureDimensions(bluenoise).xy);
+    let ray_offset = textureSample(bluenoise, nearest_sampler_repeat, bluenoise_texcoord).r;
+
     var result = raymarch_scattering(
+        ray_offset,
         lut_transmittance,
         lut_multiple_scattering,
         camera_ray.direction,

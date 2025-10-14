@@ -1,5 +1,8 @@
-use crate::wgpu_utils::{
-    BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc, wgpu_buffer_types,
+use crate::{
+    bluenoise::BluenoiseTextures,
+    wgpu_utils::{
+        BindGroupBuilder, BindGroupLayoutBuilder, BindGroupLayoutWithDesc, wgpu_buffer_types,
+    },
 };
 
 #[repr(C, align(16))]
@@ -31,7 +34,7 @@ pub struct GlobalBindings {
 }
 
 impl GlobalBindings {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, bluenoise: &BluenoiseTextures) -> Self {
         let frame_uniform_buffer_size = std::mem::size_of::<FrameUniformBuffer>() as u64;
         let frame_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Frame uniform buffer"),
@@ -45,6 +48,11 @@ impl GlobalBindings {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
                 min_binding_size: std::num::NonZeroU64::new(frame_uniform_buffer_size),
+            })
+            .next_binding_all(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
             })
             .next_binding_all(wgpu::BindingType::Sampler(
                 wgpu::SamplerBindingType::NonFiltering,
@@ -101,6 +109,7 @@ impl GlobalBindings {
                 offset: 0,
                 size: std::num::NonZeroU64::new(frame_uniform_buffer_size),
             })
+            .texture(&bluenoise.texture_view_2d)
             .sampler(&nearest_neighbor_sampler_clamp)
             .sampler(&nearest_neighbor_sampler_repeat)
             .sampler(&trilinear_sampler_clamp)

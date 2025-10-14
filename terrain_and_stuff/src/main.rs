@@ -6,6 +6,7 @@ mod main_web;
 mod shaders_embedded;
 
 mod atmosphere;
+mod bluenoise;
 mod camera;
 mod config;
 mod egui_minifb;
@@ -38,7 +39,7 @@ use result_ext::ResultExt;
 use terrain::TerrainRenderer;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
-use crate::config::Config;
+use crate::{bluenoise::BluenoiseTextures, config::Config};
 
 const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
@@ -160,7 +161,8 @@ impl Application<'_> {
         let resolution = glam::uvec2(window.get_size().0 as _, window.get_size().1 as _);
         let screen = Screen::new(&device, &adapter, surface, resolution);
         let primary_depth_buffer = PrimaryDepthBuffer::new(&device, resolution);
-        let global_bindings = GlobalBindings::new(&device);
+        let bluenoise = BluenoiseTextures::load(&device, &queue);
+        let global_bindings = GlobalBindings::new(&device, &bluenoise);
         let hdr_backbuffer = HdrBackbuffer::new(
             &device,
             &queue,

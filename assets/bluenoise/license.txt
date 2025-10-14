@@ -1,0 +1,25 @@
+Sourced via:
+https://diglib.eg.org/items/a96087bb-abe8-4851-968c-cccc7f17e08c
+
+Paper & assets licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+
+
+BibTeX:
+
+@inproceedings{
+    10.2312:sr.20221161,
+    booktitle = {Eurographics Symposium on Rendering},
+    editor = {Ghosh, Abhijeet and Wei, Li-Yi},
+    title = {{Spatiotemporal Blue Noise Masks}},
+    author = {Wolfe, Alan and Morrical, Nathan and Akenine-Möller, Tomas and Ramamoorthi, Ravi},
+    year = {2022},
+    publisher = {The Eurographics Association},
+    ISSN = {1727-3463},
+    ISBN = {978-3-03868-187-8},
+    DOI = {10.2312/sr.20221161}
+}
+
+-------------
+
+using only `stbn_vec1_2Dx1D_128x128x64_0.png` as of writing since I don't need temporality yet,
+but likely need it in the future!

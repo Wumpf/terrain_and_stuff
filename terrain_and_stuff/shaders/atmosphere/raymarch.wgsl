@@ -56,7 +56,8 @@ fn max_marching_distance_km(ray_to_sun_km: Ray, geometry_distance_on_camera_ray:
     return min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 }
 
-fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
+fn raymarch_scattering(ray_offset: f32, // Expected to be in range 0-1
+                        transmittance_lut: texture_2d<f32>,
                         multiple_scattering_lut: texture_2d<f32>,
                         direction: vec3f,
                         planet_relative_position_km: vec3f,
@@ -79,7 +80,7 @@ fn raymarch_scattering(transmittance_lut: texture_2d<f32>,
     // TODO: randomize sample offsets would help a lot here.
     let dt = max_marching_distance_km / NumScatteringSteps;
     var t = 0.0;
-    const sample_segment_t: f32 = 0.3;
+    let sample_segment_t = ray_offset; // 0.3
 
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
         let t_new = (i + sample_segment_t) * dt;

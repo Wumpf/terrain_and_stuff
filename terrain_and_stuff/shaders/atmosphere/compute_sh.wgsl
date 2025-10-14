@@ -55,8 +55,10 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
 
     let planet_relative_position_km = vec3f(0.0, atmosphere_params.ground_radius_km + 0.2, 0.0); // Put the SH "probe" at 200m altitude.
     let max_marching_distance_km = 999999999999.0;
+    let ray_offset = 0.3; // No need to sample a blue noise texture here for ray offset.
 
     var sample_raymarch_result = raymarch_scattering(
+        ray_offset,
         transmittance_lut,
         multiple_scattering_lut,
         direction,
@@ -85,6 +87,7 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
     // Compute sun luminance.
     if (sample_index == 0) {
         let sun_raymarch_result = raymarch_scattering(
+            ray_offset,
             transmittance_lut,
             multiple_scattering_lut,
             frame_uniforms.dir_to_sun,
