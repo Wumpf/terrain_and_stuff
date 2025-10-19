@@ -23,7 +23,7 @@
 #import "atmosphere/params.wgsl"::{atmosphere_params}
 #import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
 
-const NumScatteringSteps: f32 = 64.0;
+const NumScatteringSteps: f32 = 32.0;
 
 struct ScatteringResult {
     scattering : vec3f,
@@ -56,7 +56,9 @@ fn max_marching_distance_km(ray_to_sun_km: Ray, geometry_distance_on_camera_ray:
     return min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 }
 
-fn raymarch_scattering(ray_offset: f32, // Expected to be in range 0-1
+// `sample_segment_t` determines where along the segment we sample transmittance and scattering.
+// It's expected to be a random value in range 0-1.
+fn raymarch_scattering(sample_segment_t: f32,
                         transmittance_lut: texture_2d<f32>,
                         multiple_scattering_lut: texture_2d<f32>,
                         direction: vec3f,
@@ -77,15 +79,17 @@ fn raymarch_scattering(ray_offset: f32, // Expected to be in range 0-1
     var transmittance = vec3f(1.0);
 
     // TODO: Using a fixed sample count right now, but maybe we should use a dynamic one depending on the distance we're marching?
-    // TODO: randomize sample offsets would help a lot here.
-    let dt = max_marching_distance_km / NumScatteringSteps;
-    var t = 0.0;
-    let sample_segment_t = ray_offset; // 0.3
-
+    let inv_num_scattering_steps = 1.0 / NumScatteringSteps;
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
-        let t_new = (i + sample_segment_t) * dt;
-        let dt_exact = t_new - t;
-        t = t_new;
+        // Quadratic distance sampling for much higher precision up close.
+        var t0 = i * inv_num_scattering_steps;
+        var t1 = t0 + inv_num_scattering_steps;
+        t1 = (t1 * t1) * max_marching_distance_km;
+        t0 = (t0 * t0) * max_marching_distance_km;
+        var dt = t1 - t0;
+        // We don't use `sample_segment_t` as a fixed offset, but rather as a percentage of the current segment
+        // (with segments becoming larger quadratically larger)
+        let t = t0 + dt * sample_segment_t;
 
         let new_planet_relative_position_km = planet_relative_position_km + t * direction;
         let sample_height = length(new_planet_relative_position_km);
@@ -95,7 +99,7 @@ fn raymarch_scattering(ray_offset: f32, // Expected to be in range 0-1
         let sun_cos_zenith_angle = dot(zenith, dir_to_sun);
 
         let scattering = scattering_values_for(altitude_km);
-        let sample_transmittance = exp(-dt_exact * scattering.total_extinction_per_km);
+        let sample_transmittance = exp(-dt * scattering.total_extinction_per_km);
 
         let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, sun_cos_zenith_angle);
 
