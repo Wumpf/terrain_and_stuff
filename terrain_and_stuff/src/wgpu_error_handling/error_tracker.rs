@@ -121,15 +121,6 @@ impl ErrorTracker {
                     let ctx_err = _source
                         .downcast::<wgpu::wgc::error::ContextError>()
                         .expect("Expected wgpu core error");
-                    if ctx_err
-                        .source
-                        .downcast_ref::<wgpu::wgc::command::CommandEncoderError>()
-                        .is_some()
-                    {
-                        // Actual command encoder errors never carry any meaningful
-                        // information: ignore them.
-                        return;
-                    }
 
                     super::wgpu_core_error::WgpuCoreWrappedContextError(ctx_err)
                 };
