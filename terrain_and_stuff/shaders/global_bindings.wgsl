@@ -3,6 +3,8 @@ struct FrameUniformBuffer {
     projection_from_view: mat4x4f,
     projection_from_world: mat4x4f,
 
+    shadow_map_from_world: mat4x4f,
+
     /// Camera position in world space.
     camera_position: vec3f,
 

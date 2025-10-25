@@ -274,9 +274,9 @@ impl Atmosphere {
                     debug_label: "lut_transmittance".to_owned(),
                     layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in(
+                    fragment_shader: Some(ShaderEntryPoint::first_in(
                         "atmosphere/lut_transmittance.wgsl",
-                    ),
+                    )),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -336,9 +336,9 @@ impl Atmosphere {
                     debug_label: "lut_multiple_scattering".to_owned(),
                     layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in(
+                    fragment_shader: Some(ShaderEntryPoint::first_in(
                         "atmosphere/lut_multiple_scattering.wgsl",
-                    ),
+                    )),
                     fragment_targets: vec![HdrBackbuffer::FORMAT.into()],
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -408,9 +408,9 @@ impl Atmosphere {
                     debug_label: "render_atmosphere".to_owned(),
                     layout: raymarch_layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: ShaderEntryPoint::first_in(
+                    fragment_shader: Some(ShaderEntryPoint::first_in(
                         "atmosphere/render_atmosphere.wgsl",
-                    ),
+                    )),
                     fragment_targets: vec![wgpu::ColorTargetState {
                         format: HdrBackbuffer::FORMAT,
                         blend: Some(wgpu::BlendState {

@@ -12,6 +12,8 @@ pub struct FrameUniformBuffer {
     pub projection_from_view: wgpu_buffer_types::Mat4,
     pub projection_from_world: wgpu_buffer_types::Mat4,
 
+    pub shadow_map_from_world: wgpu_buffer_types::Mat4,
+
     /// Camera position in world space.
     pub camera_position: wgpu_buffer_types::Vec3RowPadded,
 

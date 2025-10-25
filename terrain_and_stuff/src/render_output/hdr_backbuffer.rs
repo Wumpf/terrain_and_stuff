@@ -68,7 +68,7 @@ impl HdrBackbuffer {
                 debug_label: "Display transform".to_owned(),
                 layout: pipeline_layout,
                 vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                fragment_shader: ShaderEntryPoint::first_in("display_transform.wgsl"),
+                fragment_shader: Some(ShaderEntryPoint::first_in("display_transform.wgsl")),
                 fragment_targets: vec![output_format.into()],
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
@@ -145,6 +145,18 @@ impl HdrBackbuffer {
         render_pass.draw(0..3, 0..1);
 
         Ok(())
+    }
+
+    pub fn color_attachment(&self) -> wgpu::RenderPassColorAttachment<'_> {
+        wgpu::RenderPassColorAttachment {
+            view: &self.hdr_backbuffer_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                store: wgpu::StoreOp::Store,
+            },
+        }
     }
 }
 

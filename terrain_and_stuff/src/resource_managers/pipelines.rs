@@ -10,6 +10,7 @@ slotmap::new_key_type! { pub struct ComputePipelineHandle; }
 #[cfg(not(target_arch = "wasm32"))]
 const SHADERS_DIR: &str = "terrain_and_stuff/shaders";
 
+#[derive(Clone)]
 pub struct ShaderEntryPoint {
     /// Path relative to the `shaders` directory.
     pub path: PathBuf,
@@ -37,11 +38,12 @@ impl ShaderEntryPoint {
 ///
 /// Also, leaving out some fields  that I don't need & simplifying others.
 /// (like vertex buffers. Srsly who needs vertex buffers in this time and day when you can just always do programmable pulling ;-))
+#[derive(Clone)]
 pub struct RenderPipelineDescriptor {
     pub debug_label: String,
     pub layout: wgpu::PipelineLayout, // TODO: pipeline layout sharing? Add a manager? Probably not that important.
     pub vertex_shader: ShaderEntryPoint,
-    pub fragment_shader: ShaderEntryPoint,
+    pub fragment_shader: Option<ShaderEntryPoint>,
     pub fragment_targets: Vec<wgpu::ColorTargetState>,
     pub primitive: wgpu::PrimitiveState,
     pub depth_stencil: Option<wgpu::DepthStencilState>,
@@ -311,14 +313,14 @@ fn create_wgpu_render_pipeline(
 ) -> Result<(wgpu::RenderPipeline, HashSet<ShaderHandle>), PipelineError> {
     let vertex_shader_handle =
         shader_cache.get_or_load_shader_module(device, &descriptor.vertex_shader.path)?;
-    let fragment_shader_handle =
-        shader_cache.get_or_load_shader_module(device, &descriptor.fragment_shader.path)?;
+    let fragment_shader_handle = if let Some(fragment_shader) = &descriptor.fragment_shader {
+        Some(shader_cache.get_or_load_shader_module(device, &fragment_shader.path)?)
+    } else {
+        None
+    };
 
     let vertex_shader_module = shader_cache
         .shader_module(vertex_shader_handle)
-        .expect("Invalid shader handle");
-    let fragment_shader_module = shader_cache
-        .shader_module(fragment_shader_handle)
         .expect("Invalid shader handle");
 
     let targets = descriptor
@@ -326,6 +328,27 @@ fn create_wgpu_render_pipeline(
         .iter()
         .map(|target| Some(target.clone()))
         .collect::<Vec<_>>();
+
+    let fragment = if let Some(fragment_shader) = &descriptor.fragment_shader
+        && let Some(fragment_shader_handle) = fragment_shader_handle
+    {
+        let fragment_shader_module = shader_cache
+            .shader_module(fragment_shader_handle)
+            .expect("Invalid shader handle");
+
+        Some(wgpu::FragmentState {
+            module: fragment_shader_module,
+            entry_point: fragment_shader.function_name.as_deref(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &fragment_shader.overrides,
+                zero_initialize_workgroup_memory: false,
+            },
+            targets: &targets,
+        })
+    } else {
+        None
+    };
+
     let wgpu_desc = wgpu::RenderPipelineDescriptor {
         label: Some(&descriptor.debug_label),
         layout: Some(&descriptor.layout),
@@ -338,15 +361,7 @@ fn create_wgpu_render_pipeline(
             },
             buffers: &[],
         },
-        fragment: Some(wgpu::FragmentState {
-            module: fragment_shader_module,
-            entry_point: descriptor.fragment_shader.function_name.as_deref(),
-            compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &descriptor.fragment_shader.overrides,
-                zero_initialize_workgroup_memory: false,
-            },
-            targets: &targets,
-        }),
+        fragment,
         primitive: descriptor.primitive,
         depth_stencil: descriptor.depth_stencil.clone(),
         multisample: descriptor.multisample,
@@ -355,9 +370,8 @@ fn create_wgpu_render_pipeline(
     };
     let pipeline = device.create_render_pipeline(&wgpu_desc);
 
-    let shader_handles = [vertex_shader_handle, fragment_shader_handle]
-        .into_iter()
-        .collect();
+    let mut shader_handles = HashSet::from([vertex_shader_handle]);
+    shader_handles.extend(fragment_shader_handle);
 
     Ok((pipeline, shader_handles))
 }

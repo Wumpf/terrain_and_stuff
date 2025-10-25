@@ -1,0 +1,8 @@
+todo:
+* shadow map
+    * in general for shadowing land
+    * use it in sky for some cool rays
+* planet shadow in scattering thing
+* better geometry
+* geometry coloring
+* clouds?

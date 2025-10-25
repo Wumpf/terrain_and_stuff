@@ -54,4 +54,16 @@ impl PrimaryDepthBuffer {
     pub fn view(&self) -> &wgpu::TextureView {
         &self.view
     }
+
+    pub fn depth_stencil_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
+        wgpu::RenderPassDepthStencilAttachment {
+            view: &self.view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
+                // Need to store depth for sky raymarching.
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }
+    }
 }

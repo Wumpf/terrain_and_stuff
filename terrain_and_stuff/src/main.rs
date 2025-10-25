@@ -15,6 +15,7 @@ mod primary_depth_buffer;
 mod render_output;
 mod resource_managers;
 mod result_ext;
+mod shadowmap;
 mod terrain;
 mod wgpu_error_handling;
 mod wgpu_utils;
@@ -39,7 +40,7 @@ use result_ext::ResultExt;
 use terrain::TerrainRenderer;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
-use crate::{bluenoise::BluenoiseTextures, config::Config};
+use crate::{bluenoise::BluenoiseTextures, config::Config, shadowmap::Shadowmap};
 
 const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
@@ -58,6 +59,7 @@ struct Application<'a> {
 
     atmosphere: Atmosphere,
     terrain: TerrainRenderer,
+    shadowmap: Shadowmap,
 
     window: Window,
     adapter: wgpu::Adapter,
@@ -191,6 +193,7 @@ impl Application<'_> {
             &mut pipeline_manager,
         )
         .context("Create terrain renderer")?;
+        let shadowmap = Shadowmap::new(&device);
 
         // Now that initialization is over (!), make sure to catch all errors, never crash, and deduplicate reported errors.
         // `on_uncaptured_error` is a last-resort handler which we should never hit,
@@ -233,8 +236,10 @@ impl Application<'_> {
             gpu_profiler: Some(gpu_profiler),
 
             gui,
+
             atmosphere,
             terrain,
+            shadowmap,
 
             window,
 
@@ -342,12 +347,18 @@ impl Application<'_> {
         let aspect_ratio = self.screen.aspect_ratio();
         let view_from_world = camera.view_from_world();
         let projection_from_view = camera.projection_from_view(aspect_ratio);
+        let shadow_map_from_world = self.shadowmap.shadow_projection_from_world(
+            self.config.sun_angles.dir_to_sun(),
+            self.terrain.bounding_box(),
+        );
+
         self.global_bindings.update_frame_uniform_buffer(
             &self.queue,
             &resource_managers::FrameUniformBuffer {
                 view_from_world: view_from_world.into(),
                 projection_from_view: projection_from_view.into(),
                 projection_from_world: (projection_from_view * view_from_world).into(),
+                shadow_map_from_world: shadow_map_from_world.into(),
                 camera_position: camera.position.into(),
                 camera_forward: camera.forward().into(),
                 tan_half_fov: camera.tan_half_fov(aspect_ratio).into(),
@@ -449,28 +460,23 @@ impl Application<'_> {
             .ok_or_log("prepare sky");
 
         {
+            let mut shadowmap_rpass = encoder.scoped_render_pass(
+                "Shadowmap render pass",
+                self.shadowmap.shadow_map_render_pass_descriptor(),
+            );
+            self.terrain
+                .draw_shadowmap(&mut shadowmap_rpass, &self.pipeline_manager)
+                .ok_or_log("draw shadowmap");
+        }
+        {
             let mut hdr_rpass_with_depth = encoder.scoped_render_pass(
                 "Primary HDR render pass",
                 wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: self.hdr_backbuffer.texture_view(),
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: self.primary_depth_buffer.view(),
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
-                            // Need to store depth for sky raymarching.
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
-                    }),
+                    label: Some("Primary HDR"),
+                    color_attachments: &[Some(self.hdr_backbuffer.color_attachment())],
+                    depth_stencil_attachment: Some(
+                        self.primary_depth_buffer.depth_stencil_attachment(),
+                    ),
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 },
@@ -486,7 +492,7 @@ impl Application<'_> {
             let mut hdr_rpass_without_depth = encoder.scoped_render_pass(
                 "Atmosphere HDR render pass",
                 wgpu::RenderPassDescriptor {
-                    label: None,
+                    label: Some("Atmosphere HDR"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: self.hdr_backbuffer.texture_view(),
                         depth_slice: None,
