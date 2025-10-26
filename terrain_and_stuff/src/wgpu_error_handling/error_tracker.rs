@@ -11,7 +11,7 @@ type ContextError = super::wgpu_core_error::WgpuCoreWrappedContextError;
 type ContextError = String;
 
 pub struct ErrorEntry {
-    /// Frame index for frame on which this error was last logged.
+    /// Frame index for the frame on which this error was last logged.
     last_occurred_frame_index: u64,
 
     /// Description of the error.
@@ -48,13 +48,13 @@ impl ErrorTracker {
     ///
     /// `on_last_scope_resolved` is called when the last scope has resolved.
     ///
-    /// `frame_index` should be the currently active frame index which is associated with the scope.
+    /// `frame_index` should be the currently active frame index associated with the scope.
     /// (by the time the scope finishes, the active frame index may have changed)
     pub fn handle_error_future(
         self: &std::sync::Arc<Self>,
         backend: wgpu::Backend,
         error_scope_result: impl IntoIterator<
-            Item = impl std::future::Future<Output = Option<wgpu::Error>> + Send + 'static,
+            Item = impl Future<Output = Option<wgpu::Error>> + Send + 'static,
         >,
         frame_index: u64,
         on_last_scope_resolved: impl Fn(&Self, u64) + Send + Sync + 'static,
@@ -91,7 +91,7 @@ impl ErrorTracker {
 
     /// Logs a wgpu error to the tracker.
     ///
-    /// If the error happened already already, it will be deduplicated.
+    /// If the error happened already, it will be deduplicated.
     ///
     /// `frame_index` should be the frame index associated with the error scope.
     /// Since errors are reported on the `device timeline`, not the `content timeline`,

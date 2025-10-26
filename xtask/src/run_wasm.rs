@@ -102,7 +102,7 @@ pub fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     if release {
         log::info!("running wasm-opt");
 
-        let wasm_path = format!("target/generated/app_bg.wasm");
+        let wasm_path = "target/generated/app_bg.wasm".to_string();
         xshell::cmd!(
             shell,
             "wasm-opt {wasm_path} -O2 --output {wasm_path} --enable-reference-types"
@@ -119,7 +119,7 @@ pub fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     for file in static_files {
         log::info!(
             "copying static file \"{}\"",
-            file.canonicalize().unwrap().display()
+            file.canonicalize()?.display()
         );
 
         shell

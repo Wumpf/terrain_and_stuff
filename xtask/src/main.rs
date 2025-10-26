@@ -23,7 +23,7 @@ Options:
 #[macro_export]
 macro_rules! bad_arguments {
     ($($arg:tt)*) => {{
-        eprintln!("{}", crate::HELP);
+        eprintln!("{}", $crate::HELP);
         anyhow::bail!($($arg)*)
     }};
 }

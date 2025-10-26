@@ -222,8 +222,7 @@ impl Application<'_> {
                 enable_debug_groups: true,
                 max_num_pending_frames: 2,
             },
-        )
-        .unwrap();
+        )?;
 
         let config = Config::load_from_ron_file_or_default_and_log_error(CONFIG_FILE_PATH);
 

@@ -12,9 +12,9 @@ pub use wgpu_error_scope::WgpuErrorScope;
 // -------
 
 fn handle_async_error(
-    backend_type: wgpu::Backend,
+    backend_type: Backend,
     resolve_callback: impl FnOnce(Option<wgpu::Error>) + 'static,
-    error_future: impl std::future::Future<Output = Option<wgpu::Error>> + Send + 'static,
+    error_future: impl Future<Output = Option<wgpu::Error>> + Send + 'static,
 ) {
     match backend_type {
         Backend::BrowserWebGpu => {

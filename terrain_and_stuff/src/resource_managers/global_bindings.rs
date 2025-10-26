@@ -37,7 +37,7 @@ pub struct GlobalBindings {
 
 impl GlobalBindings {
     pub fn new(device: &wgpu::Device, bluenoise: &BluenoiseTextures) -> Self {
-        let frame_uniform_buffer_size = std::mem::size_of::<FrameUniformBuffer>() as u64;
+        let frame_uniform_buffer_size = size_of::<FrameUniformBuffer>() as u64;
         let frame_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Frame uniform buffer"),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,

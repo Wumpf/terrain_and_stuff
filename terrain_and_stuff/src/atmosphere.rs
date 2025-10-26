@@ -213,7 +213,7 @@ impl Atmosphere {
     ) -> Result<Self, PipelineError> {
         let sh_coefficients_buffer_size = (1 + 3 + 5 // SH bands 0, 1, 2
             + 1) * // Sun illuminance.
-            (std::mem::size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
+            (size_of::<Vec3RowPadded>() as u64); // RGB for each band, need to add padding
         let sky_and_sun_lighting_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SH coefficients"),
             size: sh_coefficients_buffer_size,

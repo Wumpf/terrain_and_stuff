@@ -22,7 +22,7 @@ impl WgpuErrorScope {
 
     pub fn end(
         mut self,
-    ) -> [impl std::future::Future<Output = Option<wgpu::Error>> + Send + 'static; 3] {
+    ) -> [impl Future<Output = Option<wgpu::Error>> + Send + 'static; 3] {
         self.open = false;
         [
             self.device.pop_error_scope(),

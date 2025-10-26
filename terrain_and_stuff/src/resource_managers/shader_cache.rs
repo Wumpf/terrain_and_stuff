@@ -226,7 +226,7 @@ impl ShaderCache {
     }
 }
 
-fn raw_shader_source(full_path: &std::path::Path) -> Result<String, ShaderCacheError> {
+fn raw_shader_source(full_path: &Path) -> Result<String, ShaderCacheError> {
     #[cfg(target_arch = "wasm32")]
     {
         let path_str = full_path.to_str().expect("Shader path is not valid UTF-8");
@@ -262,7 +262,7 @@ fn resolve_path(path: &Path) -> Result<PathBuf, ShaderCacheError> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn resolve_path(path: &Path) -> Result<PathBuf, ShaderCacheError> {
-    std::path::Path::new(SHADERS_DIR)
+    Path::new(SHADERS_DIR)
         .join(path)
         .canonicalize()
         .map_err(|err| ShaderCacheError::FailedToLoadShaderSource {
@@ -280,7 +280,7 @@ fn composer_path(path: &Path) -> String {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn composer_path(path: &Path) -> String {
-    let base_path = std::path::Path::new(SHADERS_DIR).canonicalize().unwrap();
+    let base_path = Path::new(SHADERS_DIR).canonicalize().unwrap();
     let relative_path = path.strip_prefix(&base_path).unwrap();
     relative_path
         .to_str()
