@@ -463,6 +463,9 @@ impl Application<'_> {
                 "Shadowmap render pass",
                 self.shadowmap.shadow_map_render_pass_descriptor(),
             );
+
+            shadowmap_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
+
             self.terrain
                 .draw_shadowmap(&mut shadowmap_rpass, &self.pipeline_manager)
                 .ok_or_log("draw shadowmap");
