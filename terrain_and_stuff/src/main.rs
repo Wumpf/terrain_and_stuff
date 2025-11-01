@@ -207,7 +207,7 @@ impl Application<'_> {
         device.on_uncaptured_error({
             let error_tracker = Arc::clone(&error_tracker);
             let frame_index_for_uncaptured_errors = frame_index_for_uncaptured_errors.clone();
-            Box::new(move |err| {
+            Arc::new(move |err| {
                 error_tracker.handle_error(
                     err,
                     frame_index_for_uncaptured_errors.load(std::sync::atomic::Ordering::Acquire),

@@ -10,8 +10,8 @@ edition = "2024"
 # Because someone gotta test the cutting edge!
 #wgpu = { git = "https://github.com/gfx-rs/wgpu", branch = "trunk" }
 
-egui = { git = "https://github.com/emilk/egui", branch = "main" }
-egui-wgpu = { git = "https://github.com/emilk/egui", branch = "main" }
+#egui = { git = "https://github.com/emilk/egui", branch = "main" }
+#egui-wgpu = { git = "https://github.com/emilk/egui", branch = "main" }
 
 minifb = { git = "https://github.com/emoon/rust_minifb", branch = "master" }
 

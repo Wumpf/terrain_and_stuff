@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 use crate::{EncoderScope, render_output::Screen};
 
@@ -37,14 +36,10 @@ impl EguiMinifb {
     pub fn new(device: &wgpu::Device, screen: &Screen) -> Self {
         // TODO: DPI scaling, see also https://github.com/emoon/rust_minifb/issues/236
 
-        let dithering = true;
-        let msaa_samples = 1;
         let renderer = egui_wgpu::Renderer::new(
             device,
             screen.surface_format(),
-            None,
-            msaa_samples,
-            dithering,
+            egui_wgpu::RendererOptions::default(),
         );
 
         Self {
@@ -177,7 +172,7 @@ impl EguiMinifb {
             viewport_output: _,
         } = self.update_output.take().unwrap();
 
-        let screen_size_pixels = self.egui_ctx.screen_rect().size() * pixels_per_point;
+        let screen_size_pixels = self.egui_ctx.content_rect().size() * pixels_per_point;
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [screen_size_pixels.x as u32, screen_size_pixels.y as u32],
             pixels_per_point,
