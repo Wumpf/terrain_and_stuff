@@ -519,10 +519,10 @@ impl Application<'_> {
     }
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     #[cfg(target_arch = "wasm32")]
-    return; // Not used on web, this method is merely a placeholder.
+    return Ok(()); // Not used on web, this method is merely a placeholder.
 
     #[cfg(not(target_arch = "wasm32"))]
-    main_desktop::main_desktop().unwrap();
+    main_desktop::main_desktop()
 }

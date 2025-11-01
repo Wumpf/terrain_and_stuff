@@ -1,8 +1,8 @@
 //! Compute shader for computing luminace SH coefficients for the atmosphere at a fixed altitude.
 
-#import "global_bindings.wgsl"::{frame_uniforms}
-#import "constants.wgsl"::{TAU}
-#import "sh.wgsl"::{
+import package::global_bindings::{frame_uniforms};
+import package::constants::{TAU};
+import package::sh::{
     sh_weight_00,
     sh_weight_1n1,
     sh_weight_10,
@@ -12,12 +12,12 @@
     sh_weight_20,
     sh_weight_2p1,
     sh_weight_2p2,
-}
+};
 
-#import "atmosphere/params.wgsl"::{atmosphere_params}
-#import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
-#import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
-#import "sampling.wgsl"::{uniform_sampled_sphere_direction}
+import package::atmosphere::params::{atmosphere_params};
+import package::atmosphere::raymarch::{raymarch_scattering};
+import package::atmosphere::sky_and_sun_lighting::{SkyAndSunLightingParams};
+import package::sampling::{uniform_sampled_sphere_direction};
 
 // naga_oil doesn't support override constants :(
 //override NUM_SAMPLES: u32;

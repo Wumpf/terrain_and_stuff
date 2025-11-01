@@ -4,11 +4,11 @@
 // The value is the isotropic multiple scattering contribution to the overall luminance.
 // It is a transfer function transferring illuminance to its multiple scattering contribution as luminance.
 
-#import "constants.wgsl"::{ERROR_RGBA, PI}
-#import "intersections.wgsl"::{ray_sphere_intersect, Ray}
-#import "atmosphere/params.wgsl"::{atmosphere_params}
-#import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
-#import "sampling.wgsl"::{uniform_sampled_sphere_direction}
+import package::constants::{PI};
+import package::intersections::{ray_sphere_intersect, Ray};
+import package::atmosphere::params::{atmosphere_params};
+import package::atmosphere::scattering::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut};
+import package::sampling::{uniform_sampled_sphere_direction};
 
 const DirectionSampleCount: u32 = 256;
 const MultipleScatteringSteps: u32 = 20;

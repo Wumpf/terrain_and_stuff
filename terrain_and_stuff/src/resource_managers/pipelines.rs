@@ -12,8 +12,8 @@ const SHADERS_DIR: &str = "terrain_and_stuff/shaders";
 
 #[derive(Clone)]
 pub struct ShaderEntryPoint {
-    /// Path relative to the `shaders` directory.
-    pub path: PathBuf,
+    /// Module name (relative to the `shaders` directory, file extension not needed).
+    pub module_name: String,
 
     /// The actual shader entry point. If `None`, picks entry point with first matching type.
     pub function_name: Option<String>,
@@ -24,9 +24,9 @@ pub struct ShaderEntryPoint {
 
 impl ShaderEntryPoint {
     /// First matching shader entry point in the shader file.
-    pub fn first_in(path: impl Into<PathBuf>) -> Self {
+    pub fn first_in(path: impl Into<String>) -> Self {
         Self {
-            path: path.into(),
+            module_name: path.into(),
             function_name: None,
             overrides: Vec::new(),
         }
@@ -91,17 +91,18 @@ pub enum PipelineError {
 /// Render & compute pipeline manager with simple shader reload (native only).
 ///
 /// Shaders are embedded in the binary on the web.
+
+#[cfg_attr(target_arch = "wasm32", expect(dead_code))]
 pub struct PipelineManager {
     shader_cache: ShaderCache,
     render_pipelines: slotmap::SlotMap<RenderPipelineHandle, RenderPipelineEntry>,
     render_pipelines_with_broken_shaders: HashSet<RenderPipelineHandle>,
+
     compute_pipelines: slotmap::SlotMap<ComputePipelineHandle, ComputePipelineEntry>,
     compute_pipelines_with_broken_shaders: HashSet<ComputePipelineHandle>,
 
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     shader_change_rx: std::sync::mpsc::Receiver<PathBuf>,
 
-    //compute_pipelines: slotmap::SlotMap<PipelineKey, wgpu::ComputePipeline>,
     #[cfg(not(target_arch = "wasm32"))]
     _filewatcher: notify::RecommendedWatcher,
 }
@@ -228,11 +229,20 @@ impl PipelineManager {
                 continue;
             };
 
-            log::info!("Reloading shader {:?}", relative_path);
-            let removed_shaders = self.shader_cache.remove_shader_for_path(relative_path);
+            log::info!("Reloading shaders depending on {:?}", relative_path);
+            let removed_shaders = match self
+                .shader_cache
+                .reload_all_shaders_depending_on(device, relative_path)
+            {
+                Ok(removed_shaders) => removed_shaders,
+                Err(err) => {
+                    log::error!("Failed to reload shaders: {}", err);
+                    continue;
+                }
+            };
 
             // Try to recreate all pipelines that use this shader.
-            // Separate for compute & render pipelines - a bit repeititive, but it's not like we're gonna add more types any time soon.
+            // Separate for compute & render pipelines - a bit repetitive, but it's not like we're going to add more types any time soon.
 
             for (render_pipeline_handle, render_pipeline) in self.render_pipelines.iter_mut() {
                 let affected_by_removed_shaders = removed_shaders
@@ -312,9 +322,9 @@ fn create_wgpu_render_pipeline(
     device: &wgpu::Device,
 ) -> Result<(wgpu::RenderPipeline, HashSet<ShaderHandle>), PipelineError> {
     let vertex_shader_handle =
-        shader_cache.get_or_load_shader_module(device, &descriptor.vertex_shader.path)?;
+        shader_cache.get_or_load_shader_module(device, &descriptor.vertex_shader.module_name)?;
     let fragment_shader_handle = if let Some(fragment_shader) = &descriptor.fragment_shader {
-        Some(shader_cache.get_or_load_shader_module(device, &fragment_shader.path)?)
+        Some(shader_cache.get_or_load_shader_module(device, &fragment_shader.module_name)?)
     } else {
         None
     };
@@ -382,7 +392,7 @@ fn create_wgpu_compute_pipeline(
     device: &wgpu::Device,
 ) -> Result<(wgpu::ComputePipeline, ShaderHandle), PipelineError> {
     let compute_shader_handle =
-        shader_cache.get_or_load_shader_module(device, &descriptor.compute_shader.path)?;
+        shader_cache.get_or_load_shader_module(device, &descriptor.compute_shader.module_name)?;
     let compute_shader_module = shader_cache
         .shader_module(compute_shader_handle)
         .expect("Invalid shader handle");

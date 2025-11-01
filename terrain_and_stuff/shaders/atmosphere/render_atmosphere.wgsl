@@ -1,23 +1,22 @@
-enable dual_source_blending;
-
 // Compute per pixel atmosphere luminance & transmittance.
 
-#import "constants.wgsl"::{ERROR_RGBA}
-#import "camera.wgsl"::{view_space_position_from_depth_buffer, camera_ray_from_screenuv}
-#import "global_bindings.wgsl"::{bluenoise, frame_uniforms, nearest_sampler_repeat, trilinear_sampler_clamp}
-#import "intersections.wgsl"::{Ray}
-#import "sh.wgsl"::{evaluate_sh2} // For debugging only.
+import package::camera::{view_space_position_from_depth_buffer, camera_ray_from_screenuv};
+import package::global_bindings::{bluenoise, frame_uniforms, nearest_sampler_repeat, trilinear_sampler_clamp};
+import package::intersections::{Ray};
+import package::sh::{evaluate_sh2}; // For debugging only.
 
-#import "atmosphere/params.wgsl"::{
+import package::atmosphere::params::{
     atmosphere_params,
     AtmosphereDebugDrawMode_None,
     AtmosphereDebugDrawMode_Sh,
     AtmosphereDebugDrawMode_NoGeometryOverlay,
     AtmosphereDebugDrawMode_TransmittanceLut,
     AtmosphereDebugDrawMode_MultipleScatteringLut,
-}
-#import "atmosphere/raymarch.wgsl"::{raymarch_scattering}
-#import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
+};
+import package::atmosphere::raymarch::{raymarch_scattering};
+import package::atmosphere::sky_and_sun_lighting::{SkyAndSunLightingParams};
+
+enable dual_source_blending;
 
 @group(2) @binding(0) var lut_transmittance: texture_2d<f32>;
 @group(2) @binding(1) var lut_multiple_scattering: texture_2d<f32>;

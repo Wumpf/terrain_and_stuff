@@ -5,17 +5,15 @@ edition.workspace = true
 
 [dependencies]
 wgpu = { version = "26.0.1", default-features = false, features = [
-    # We use naga_oil, so we directly use naga-ir for shader creation.
-    "naga-ir",
-    # No WebGL supported!
-    "webgpu",
-    # Don't care about DX12, using Vulkan limits variety more.
-    "metal",
-    "vulkan",
-    # Shaders are in wgsl.
-    "wgsl",
-    # No time for Send/Sync headaches on the web.
-    "fragile-send-sync-non-atomic-wasm",
+  # No WebGL supported!
+  "webgpu",
+  # Don't care about DX12, using Vulkan limits variety more.
+  "metal",
+  "vulkan",
+  # Shaders are in wgsl.
+  "wgsl",
+  # No time for Send/Sync headaches on the web.
+  "fragile-send-sync-non-atomic-wasm",
 ] }
 
 anyhow = "1.0.90"
@@ -28,7 +26,6 @@ itertools = "0.14.0"
 log = "0.4.28"                                                  # Logging, mostly since println can't be used on the web.
 macaw = "0.30.0"
 minifb = "0.28.0"
-naga_oil = { version = "0.19.0", default-features = false }
 parking_lot = "0.12.3"
 png = "0.18.0"
 ron = "0.11"
@@ -37,6 +34,7 @@ slotmap = "1.0.7"
 thiserror = "2.0.11"
 tiff = "0.9.1"
 web-time = { version = "1.1.0", default-features = false }
+wesl = "0.2.0"
 wgpu-profiler = "0.24.0"
 
 
@@ -44,8 +42,8 @@ wgpu-profiler = "0.24.0"
 # Native only dependencies.
 pollster = "0.4.0"
 env_logger = { version = "0.11.8", default-features = false, features = [
-    "auto-color",
-    "humantime",
+  "auto-color",
+  "humantime",
 ] }
 notify = "8.0.0"
 
@@ -54,7 +52,7 @@ notify = "8.0.0"
 # Web only dependencies.
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
-wasm-bindgen = "0.2.103"
+wasm-bindgen = "0.2.105"
 wasm-bindgen-futures = "0.4.53"
 
 [build-dependencies]

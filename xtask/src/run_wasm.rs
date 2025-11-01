@@ -117,10 +117,7 @@ pub fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         .context("Failed to enumerate static files")?;
 
     for file in static_files {
-        log::info!(
-            "copying static file \"{}\"",
-            file.canonicalize()?.display()
-        );
+        log::info!("copying static file \"{}\"", file.canonicalize()?.display());
 
         shell
             .copy_file(&file, "target/generated")

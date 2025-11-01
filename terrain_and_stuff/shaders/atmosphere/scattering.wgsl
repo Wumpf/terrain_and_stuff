@@ -1,6 +1,6 @@
-#import "global_bindings.wgsl"::{trilinear_sampler_clamp}
-#import "constants.wgsl"::{TAU, PI}
-#import "atmosphere/params.wgsl"::{atmosphere_params}
+import package::global_bindings::{trilinear_sampler_clamp};
+import package::constants::{TAU, PI};
+import package::atmosphere::params::{atmosphere_params};
 
 struct ScatteringValues {
     rayleigh: vec3f,

@@ -17,11 +17,11 @@
 // for our photometric units actually mean - see also Nathan's comment here on recommending to cheat
 // by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
-#import "intersections.wgsl"::{Ray, ray_sphere_intersect}
-#import "global_bindings.wgsl"::{trilinear_sampler_clamp}
+import package::intersections::{Ray, ray_sphere_intersect};
+import package::global_bindings::{trilinear_sampler_clamp};
 
-#import "atmosphere/params.wgsl"::{atmosphere_params}
-#import "atmosphere/scattering.wgsl"::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut}
+import package::atmosphere::params::{atmosphere_params};
+import package::atmosphere::scattering::{scattering_values_for, mie_phase, rayleigh_phase, sample_transmittance_lut};
 
 const NumScatteringSteps: f32 = 32.0;
 

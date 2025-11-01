@@ -1,6 +1,6 @@
-#import "constants.wgsl"::{ERROR_RGBA}
-#import "global_bindings.wgsl"::{trilinear_sampler_clamp}
-#import "srgb.wgsl"::srgb_oetf
+import package::constants::{ERROR_RGBA};
+import package::global_bindings::{trilinear_sampler_clamp};
+import package::srgb::srgb_oetf;
 
 @group(1) @binding(0)
 var hdr_backbuffer: texture_2d<f32>;
@@ -8,6 +8,7 @@ var hdr_backbuffer: texture_2d<f32>;
 @group(1) @binding(1)
 var tony_mc_mapface_lut: texture_3d<f32>;
 
+// TODO: add shadow map for debugging only
 
 // Adapted from
 // https://www.shadertoy.com/view/llVGzG

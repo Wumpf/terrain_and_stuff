@@ -4,11 +4,11 @@
 // with some parameterization (see `ray_to_sun_texcoord`).
 // The value is the transmittance from that point to sun, through the atmosphere using single scattering only
 
-#import "constants.wgsl"::{ERROR_RGBA, TAU, TAU_INV, PI}
-#import "intersections.wgsl"::{ray_sphere_intersect, Ray}
+import package::constants::{ERROR_RGBA, TAU, TAU_INV, PI};
+import package::intersections::{ray_sphere_intersect, Ray};
 
-#import "atmosphere/scattering.wgsl"::{scattering_values_for, ScatteringValues}
-#import "atmosphere/params.wgsl"::{atmosphere_params}
+import package::atmosphere::scattering::{scattering_values_for, ScatteringValues};
+import package::atmosphere::params::{atmosphere_params};
 
 const SunTransmittanceSteps: f32 = 40.0;
 

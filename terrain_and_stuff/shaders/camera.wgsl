@@ -1,5 +1,5 @@
-#import "global_bindings.wgsl"::{frame_uniforms}
-#import "intersections.wgsl"::{Ray}
+import package::global_bindings::{frame_uniforms};
+import package::intersections::{Ray};
 
 fn camera_ray_from_screenuv(texcoord: vec2f) -> Ray {
     return Ray(frame_uniforms.camera_position, camera_dir_from_screenuv(texcoord));

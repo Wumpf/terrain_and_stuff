@@ -1,6 +1,6 @@
-#import "global_bindings.wgsl"::{frame_uniforms}
-#import "atmosphere/sky_and_sun_lighting.wgsl"::{SkyAndSunLightingParams}
-#import "sh.wgsl"::{evaluate_sh2_cosine}
+import package::global_bindings::{frame_uniforms};
+import package::atmosphere::sky_and_sun_lighting::{SkyAndSunLightingParams};
+import package::sh::{evaluate_sh2_cosine};
 
 @group(1) @binding(0) var heightmap: texture_2d<f32>;
 @group(1) @binding(1) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;

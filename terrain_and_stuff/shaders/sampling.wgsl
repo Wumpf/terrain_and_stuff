@@ -1,4 +1,4 @@
-#import "constants.wgsl"::{TAU, GOLDEN_RATIO}
+import package::constants::{TAU, GOLDEN_RATIO};
 
 // Fibbonaci lattice for point sampling on sphere.
 // https://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/
