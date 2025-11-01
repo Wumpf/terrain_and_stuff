@@ -19,6 +19,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save_to_ron_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         let contents = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::new())?;
         std::fs::write(path, contents)?;
@@ -26,6 +27,7 @@ impl Config {
     }
 
     pub fn save_to_ron_file_or_log_error(&self, path: impl AsRef<Path>) {
+        #[cfg(not(target_arch = "wasm32"))]
         if let Err(err) = self.save_to_ron_file(path) {
             log::error!("Failed to save config.ron: {}", err);
         }

@@ -32,7 +32,7 @@ pub enum ShaderCacheError {
 
 impl ShaderCache {
     pub fn new() -> Self {
-        let mut wesl_compiler;
+        let wesl_compiler;
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -43,16 +43,12 @@ impl ShaderCache {
                     std::borrow::Cow::Borrowed(content),
                 );
             }
-            wesl_compiler = wesl::Wesl::new_barebones().set_custom_resolver(resolver);
+            wesl_compiler = wesl::Wesl::new("").set_custom_resolver(resolver);
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
             wesl_compiler = wesl::Wesl::new("terrain_and_stuff/shaders");
         }
-
-        wesl_compiler
-            .set_mangler(wesl::ManglerKind::Escape)
-            .use_sourcemap(true);
 
         Self {
             wesl_compiler,

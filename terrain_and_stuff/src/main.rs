@@ -262,8 +262,10 @@ impl Application<'_> {
         let current_time = Instant::now();
         let delta_time = current_time.duration_since(self.last_update);
 
-        // Very crude FPS limiter:
-        let delta_time = if let Some(target_fps) = self.config.target_fps {
+        // Very crude FPS limiter (not active on web since we can't sleep there)
+        let delta_time = if !cfg!(target_arch = "wasm32")
+            && let Some(target_fps) = self.config.target_fps
+        {
             let target_delta_time = std::time::Duration::from_secs_f32(1.0 / target_fps as f32);
             if let Some(sleep_time) = target_delta_time.checked_sub(delta_time) {
                 std::thread::sleep(sleep_time);

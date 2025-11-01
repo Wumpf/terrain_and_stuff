@@ -63,30 +63,33 @@ pub fn run_gui(
                 list_gpu_profiling_results_recursive(ui, last_result);
             });
 
-        egui::CollapsingHeader::new("FPS Limiter")
-            .default_open(false)
-            .show(ui, |ui| {
-                egui::Grid::new("fps_limiter").show(ui, |ui| {
-                    ui.label("Enable");
-                    let mut enabled = target_fps.is_some();
-                    egui::Checkbox::new(&mut enabled, "").ui(ui);
-                    *target_fps = if enabled {
-                        Some(target_fps.unwrap_or(240))
-                    } else {
-                        None
-                    };
-                    ui.end_row();
-
-                    if let Some(target_fps) = target_fps {
-                        ui.label("Target FPS");
-                        egui::DragValue::new(target_fps)
-                            .range(10..=500)
-                            .speed(1.0)
-                            .ui(ui);
+        // Can't sleep on web.
+        if !cfg!(target_arch = "wasm32") {
+            egui::CollapsingHeader::new("FPS Limiter")
+                .default_open(false)
+                .show(ui, |ui| {
+                    egui::Grid::new("fps_limiter").show(ui, |ui| {
+                        ui.label("Enable");
+                        let mut enabled = target_fps.is_some();
+                        egui::Checkbox::new(&mut enabled, "").ui(ui);
+                        *target_fps = if enabled {
+                            Some(target_fps.unwrap_or(240))
+                        } else {
+                            None
+                        };
                         ui.end_row();
-                    }
+
+                        if let Some(target_fps) = target_fps {
+                            ui.label("Target FPS");
+                            egui::DragValue::new(target_fps)
+                                .range(10..=500)
+                                .speed(1.0)
+                                .ui(ui);
+                            ui.end_row();
+                        }
+                    });
                 });
-            });
+        }
     });
 
     *uses_cursor =
