@@ -81,11 +81,11 @@ pub struct AtmosphereParams {
 
     // Sun's angle is 0.5 degrees according to this.
     // https://www.nasa.gov/wp-content/uploads/2015/01/YOSS_Act_9.pdf
-    //const sun_diameteter_rad = 0.5 * DEG_TO_RAD;
+    //const sun_diameter_rad = 0.5 * DEG_TO_RAD;
     // But it doesn't look that nice:
-    // we'd need some really heavy bloom to account for the fact that this is an excrucingly bright spot.
+    // we'd need some really heavy bloom to account for the fact that this is an excruciatingly bright spot.
     // See also `sun_unscattered_luminance` below.
-    pub sun_disk_diameteter_rad: f32,
+    pub sun_disk_diameter_rad: f32,
 
     // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
     pub sun_disk_illuminance_factor: f32,
@@ -121,7 +121,7 @@ impl Default for AtmosphereParams {
             // Roughly the intensity Sun without any scattering
             // https://en.wikipedia.org/wiki/Luminance
             //const sun_unscattered_luminance: vec3f = vec3f(1.6, 1.6, 1.6) * 1000000000.0;
-            // Okay that's just too much to work with practically 🤷
+            // Okay, that's just too much to work with practically 🤷
             // Instead we just use the sun as the grounding measure of things.
             sun_illuminance: glam::vec3(1.6, 1.6, 1.6).into(),
 
@@ -131,9 +131,9 @@ impl Default for AtmosphereParams {
             // But it doesn't look that nice:
             // we'd need some really heavy bloom to account for the fact that this is an excrucingly bright spot.
             // See also `sun_unscattered_luminance` below.
-            sun_disk_diameteter_rad: 1.0 * std::f32::consts::TAU / 360.0,
+            sun_disk_diameter_rad: 1.0 * std::f32::consts::TAU / 360.0,
 
-            // When directly looking at the sun.. _waves hands_.. the maths breaks down and we just want to draw a white spot, okay? ;-)
+            // When directly looking at the sun... _waves hands_... the maths breaks down, and we just want to draw a white spot, okay? ;-)
             sun_disk_illuminance_factor: 100.0,
 
             ground_albedo: glam::vec3(0.3, 0.3, 0.3).into(),

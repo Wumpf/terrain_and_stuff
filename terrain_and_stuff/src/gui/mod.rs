@@ -110,7 +110,7 @@ fn atmosphere_settings(
         mie_scale_height,
         mie_scattering_per_km_density,
         mie_absorption_per_km_density,
-        sun_disk_diameteter_rad,
+        sun_disk_diameter_rad: sun_disk_diameteter_rad,
         sun_disk_illuminance_factor,
         ozone_absorption_per_km_density,
         enable_multiple_scattering,
@@ -189,7 +189,7 @@ fn atmosphere_settings(
                     ui,
                     "Sun disk diameter",
                     sun_disk_diameteter_rad,
-                    default_params.sun_disk_diameteter_rad,
+                    default_params.sun_disk_diameter_rad,
                     egui::Ui::drag_angle,
                 );
 
