@@ -8,8 +8,6 @@ var hdr_backbuffer: texture_2d<f32>;
 @group(1) @binding(1)
 var tony_mc_mapface_lut: texture_3d<f32>;
 
-// TODO: add shadow map for debugging only
-
 // Adapted from
 // https://www.shadertoy.com/view/llVGzG
 // Originally presented in:

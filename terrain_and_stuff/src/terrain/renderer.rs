@@ -9,7 +9,7 @@ use crate::{
         GlobalBindings, PipelineError, PipelineManager, RenderPipelineDescriptor,
         RenderPipelineHandle, ShaderEntryPoint,
     },
-    shadowmap::Shadowmap,
+    shadowmap::ShadowMap,
     wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder},
 };
 
@@ -105,7 +105,7 @@ impl TerrainRenderer {
                 debug_label: "Terrain Shadow".to_owned(),
                 fragment_shader: None,
                 fragment_targets: Vec::new(),
-                depth_stencil: Some(Shadowmap::STATE_WRITE),
+                depth_stencil: Some(ShadowMap::STATE_WRITE),
                 ..render_pipeline_descriptor
             },
         )?;

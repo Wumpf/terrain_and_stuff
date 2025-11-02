@@ -91,7 +91,6 @@ pub enum PipelineError {
 /// Render & compute pipeline manager with simple shader reload (native only).
 ///
 /// Shaders are embedded in the binary on the web.
-
 #[cfg_attr(target_arch = "wasm32", expect(dead_code))]
 pub struct PipelineManager {
     shader_cache: ShaderCache,

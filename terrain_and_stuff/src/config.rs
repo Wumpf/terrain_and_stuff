@@ -1,11 +1,47 @@
 use std::path::Path;
 
+use crate::wgpu_utils::wgpu_buffer_types::WgslEnum;
 use crate::{
     atmosphere::{AtmosphereParams, SunAngles},
     camera::Camera,
 };
 
-/// Config file that allows to store all relevant application state into a single file.
+#[derive(
+    Default,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    bytemuck::Zeroable,
+    bytemuck::CheckedBitPattern,
+    bytemuck::Contiguous,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[repr(u32)]
+pub enum DebugDrawMode {
+    #[default]
+    None = 0,
+    ShadowMap = 1,
+}
+
+impl std::fmt::Display for DebugDrawMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DebugDrawMode::None => write!(f, "None"),
+            DebugDrawMode::ShadowMap => write!(f, "Shadow Map"),
+        }
+    }
+}
+
+impl From<DebugDrawMode> for u32 {
+    fn from(value: DebugDrawMode) -> Self {
+        value as u32
+    }
+}
+
+/// Config file that allows to store all relevant application states into a single file.
 ///
 /// Kept intentionally simple: extending this is meant to be explicit with minimal use of stringly typed dictionaries.
 /// Dynamicism & extensibility is for large projects & big teams. We're doing neither here! ;)
@@ -14,6 +50,7 @@ pub struct Config {
     pub sun_angles: SunAngles,
     pub atmosphere_params: AtmosphereParams,
     pub camera: Camera,
+    pub debug_mode: WgslEnum<DebugDrawMode>,
 
     pub target_fps: Option<u32>,
 }

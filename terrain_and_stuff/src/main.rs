@@ -40,7 +40,8 @@ use result_ext::ResultExt;
 use terrain::TerrainRenderer;
 use wgpu_error_handling::{ErrorTracker, WgpuErrorScope};
 
-use crate::{bluenoise::BluenoiseTextures, config::Config, shadowmap::Shadowmap};
+use crate::config::DebugDrawMode;
+use crate::{bluenoise::BluenoiseTextures, config::Config, shadowmap::ShadowMap};
 
 const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
@@ -59,7 +60,7 @@ struct Application<'a> {
 
     atmosphere: Atmosphere,
     terrain: TerrainRenderer,
-    shadowmap: Shadowmap,
+    shadow_map: ShadowMap,
 
     window: Window,
     adapter: wgpu::Adapter,
@@ -193,7 +194,13 @@ impl Application<'_> {
             &mut pipeline_manager,
         )
         .context("Create terrain renderer")?;
-        let shadowmap = Shadowmap::new(&device);
+        let shadow_map = ShadowMap::new(
+            &device,
+            &global_bindings,
+            &mut pipeline_manager,
+            screen.surface_format(),
+        )
+        .context("Create shadow map")?;
 
         // Now that initialization is over (!), make sure to catch all errors, never crash, and deduplicate reported errors.
         // `on_uncaptured_error` is a last-resort handler which we should never hit,
@@ -238,7 +245,7 @@ impl Application<'_> {
 
             atmosphere,
             terrain,
-            shadowmap,
+            shadow_map,
 
             window,
 
@@ -348,7 +355,7 @@ impl Application<'_> {
         let aspect_ratio = self.screen.aspect_ratio();
         let view_from_world = camera.view_from_world();
         let projection_from_view = camera.projection_from_view(aspect_ratio);
-        let shadow_map_from_world = self.shadowmap.shadow_projection_from_world(
+        let shadow_map_from_world = self.shadow_map.shadow_projection_from_world(
             self.config.sun_angles.dir_to_sun(),
             self.terrain.bounding_box(),
         );
@@ -405,14 +412,22 @@ impl Application<'_> {
                         .forget_lifetime(),
                     scope: Some(pass_query),
                 };
+                render_pass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
-                self.hdr_backbuffer
-                    .display_transform(
-                        &mut render_pass,
-                        &self.pipeline_manager,
-                        &self.global_bindings,
-                    )
-                    .ok_or_log("display transform");
+                match self.config.debug_mode.get() {
+                    DebugDrawMode::None => {
+                        self.hdr_backbuffer
+                            .display_transform(&mut render_pass, &self.pipeline_manager)
+                            .ok_or_log("display transform");
+                    }
+
+                    DebugDrawMode::ShadowMap => {
+                        self.shadow_map
+                            .debug_draw(&mut render_pass, &self.pipeline_manager)
+                            .ok_or_log("shadow map debug draw");
+                    }
+                }
+
                 self.gui
                     .draw(&self.device, &self.queue, &mut encoder, &mut render_pass);
             }
@@ -463,7 +478,7 @@ impl Application<'_> {
         {
             let mut shadowmap_rpass = encoder.scoped_render_pass(
                 "Shadowmap render pass",
-                self.shadowmap.shadow_map_render_pass_descriptor(),
+                self.shadow_map.shadow_map_render_pass_descriptor(),
             );
 
             shadowmap_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);

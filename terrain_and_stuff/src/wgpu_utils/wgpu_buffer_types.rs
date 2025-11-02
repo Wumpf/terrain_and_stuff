@@ -358,29 +358,25 @@ pub struct PaddingRow {
 /// A wrapper around an enum that is always stored as a u32 for consumption in wgsl.
 #[derive(Clone, Copy, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct WgslEnum<T>
-where
-    T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static,
-{
+pub struct WgslEnum<T> {
     value: u32,
     _marker: std::marker::PhantomData<T>,
 }
 
 // Bytemuck doesn't allow deriving Pod if any of the generics parameters are not Pod.
 // https://github.com/Lokathor/bytemuck/issues/191
-unsafe impl<T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static> bytemuck::Pod
-    for WgslEnum<T>
-{
-}
+unsafe impl<T: Copy + Into<u32> + Zeroable + 'static> bytemuck::Pod for WgslEnum<T> {}
 
-impl<T: Copy + Into<u32> + CheckedBitPattern + Zeroable> WgslEnum<T> {
+impl<T: Into<u32>> WgslEnum<T> {
     pub fn new(value: T) -> Self {
         Self {
             value: value.into(),
             _marker: std::marker::PhantomData,
         }
     }
+}
 
+impl<T: Copy + Into<u32> + CheckedBitPattern> WgslEnum<T> {
     pub fn set(&mut self, value: T) {
         self.value = value.into();
     }
@@ -409,6 +405,12 @@ impl<'de, T: Copy + Into<u32> + CheckedBitPattern + Zeroable + 'static + serde::
         D: serde::Deserializer<'de>,
     {
         T::deserialize(deserializer).map(|value| Self::new(value))
+    }
+}
+
+impl<T: Default + Into<u32>> Default for WgslEnum<T> {
+    fn default() -> Self {
+        Self::new(T::default())
     }
 }
 

@@ -1,10 +1,19 @@
-pub struct Shadowmap {
+use crate::resource_managers::{
+    GlobalBindings, PipelineError, PipelineManager, RenderPipelineDescriptor, RenderPipelineHandle,
+    ShaderEntryPoint,
+};
+use crate::wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder};
+
+pub struct ShadowMap {
     texture_view: wgpu::TextureView,
+
+    debug_bind_group: wgpu::BindGroup,
+    debug_draw: RenderPipelineHandle,
 }
 
 const RESOLUTION: u32 = 2024;
 
-impl Shadowmap {
+impl ShadowMap {
     pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub const STATE_WRITE: wgpu::DepthStencilState = wgpu::DepthStencilState {
@@ -24,7 +33,12 @@ impl Shadowmap {
         },
     };
 
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        global_bindings: &GlobalBindings,
+        pipeline_manager: &mut PipelineManager,
+        surface_format: wgpu::TextureFormat,
+    ) -> Result<Self, PipelineError> {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Shadowmap"),
             size: wgpu::Extent3d {
@@ -42,7 +56,45 @@ impl Shadowmap {
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        Self { texture_view }
+        let debug_bind_group_layout = BindGroupLayoutBuilder::new()
+            .next_binding_fragment(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            })
+            .create(device, "Debug shadow map");
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Debug shadow map"),
+            bind_group_layouts: &[
+                &global_bindings.bind_group_layout.layout,
+                &debug_bind_group_layout.layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let debug_bind_group = BindGroupBuilder::new(&debug_bind_group_layout)
+            .texture(&texture_view)
+            .create(device, "Debug shadow map");
+
+        let debug_draw = pipeline_manager.create_render_pipeline(
+            device,
+            RenderPipelineDescriptor {
+                debug_label: "Debug shadow map".to_owned(),
+                layout: pipeline_layout,
+                vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
+                fragment_shader: Some(ShaderEntryPoint::first_in("debug_draw_shadow_map.wgsl")),
+                fragment_targets: vec![surface_format.into()],
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+            },
+        )?;
+
+        Ok(Self {
+            texture_view,
+            debug_draw,
+            debug_bind_group,
+        })
     }
 
     /// Compute an orthographic shadow projection matrix that covers the world_bounding_box
@@ -102,5 +154,17 @@ impl Shadowmap {
             timestamp_writes: None,
             occlusion_query_set: None,
         }
+    }
+
+    pub fn debug_draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        pipeline_manager: &PipelineManager,
+    ) -> Result<(), PipelineError> {
+        render_pass.set_pipeline(pipeline_manager.get_render_pipeline(self.debug_draw)?);
+        render_pass.set_bind_group(1, Some(&self.debug_bind_group), &[]);
+        render_pass.draw(0..3, 0..1);
+
+        Ok(())
     }
 }

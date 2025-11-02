@@ -1,4 +1,5 @@
-use egui::NumExt as _;
+use crate::wgpu_utils::wgpu_buffer_types::WgslEnum;
+use egui::{NumExt as _, Ui};
 
 pub fn drag_value_vec3<T: Into<glam::Vec3> + From<glam::Vec3> + Copy>(
     ui: &mut egui::Ui,
@@ -84,4 +85,30 @@ pub fn with_default<T: Copy, R>(
         }
         f(ui, value)
     })
+}
+
+pub fn enum_combobox<
+    T: Copy
+        + Into<u32>
+        + bytemuck::Contiguous<Int = u32>
+        + bytemuck::CheckedBitPattern
+        + bytemuck::Zeroable
+        + std::fmt::Display
+        + PartialEq
+        + 'static,
+>(
+    ui: &mut Ui,
+    mode: &mut WgslEnum<T>,
+) {
+    let mut mode_enum = mode.get();
+    ui.label("Debug draw mode");
+    egui::ComboBox::from_id_salt("debug_draw_mode")
+        .selected_text(mode_enum.to_string())
+        .show_ui(ui, |ui| {
+            for variant in T::MIN_VALUE..=T::MAX_VALUE {
+                let variant = T::from_integer(variant).unwrap();
+                ui.selectable_value(&mut mode_enum, variant, variant.to_string());
+            }
+        });
+    mode.set(mode_enum);
 }

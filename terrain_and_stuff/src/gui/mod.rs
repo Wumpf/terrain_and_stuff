@@ -1,14 +1,14 @@
 mod ui_elements;
 
-use bytemuck::Contiguous as _;
 use egui::Widget as _;
 
 use crate::{
-    atmosphere::{AtmosphereDebugDrawMode, AtmosphereParams, SunAngles},
+    atmosphere::{AtmosphereParams, SunAngles},
     config::Config,
     gui::ui_elements::row_with_default,
 };
 
+use crate::gui::ui_elements::enum_combobox;
 use ui_elements::{
     drag_angle, drag_value_f32_precise_positive, drag_value_vec3, drag_value_vec3_precise_positive,
 };
@@ -29,7 +29,11 @@ pub fn run_gui(
             atmosphere_params,
             camera,
             target_fps,
+            debug_mode,
         } = config;
+
+        enum_combobox(ui, debug_mode);
+        ui.end_row();
 
         egui::CollapsingHeader::new("Atmosphere")
             .default_open(true)
@@ -110,7 +114,7 @@ fn atmosphere_settings(
         mie_scale_height,
         mie_scattering_per_km_density,
         mie_absorption_per_km_density,
-        sun_disk_diameter_rad: sun_disk_diameteter_rad,
+        sun_disk_diameter_rad,
         sun_disk_illuminance_factor,
         ozone_absorption_per_km_density,
         enable_multiple_scattering,
@@ -134,19 +138,7 @@ fn atmosphere_settings(
         drag_angle(ui, sun_altitude);
         ui.end_row();
 
-        let mut draw_mode_enum = draw_mode.get();
-        ui.label("Debug draw mode");
-        egui::ComboBox::from_id_salt("atmosphere_debug_draw_mode")
-            .selected_text(format!("{:?}", draw_mode_enum))
-            .show_ui(ui, |ui| {
-                for variant_val in
-                    AtmosphereDebugDrawMode::MIN_VALUE..=AtmosphereDebugDrawMode::MAX_VALUE
-                {
-                    let variant = AtmosphereDebugDrawMode::from_integer(variant_val).unwrap();
-                    ui.selectable_value(&mut draw_mode_enum, variant, variant.to_string());
-                }
-            });
-        draw_mode.set(draw_mode_enum);
+        enum_combobox(ui, draw_mode);
         ui.end_row();
     });
 
@@ -188,7 +180,7 @@ fn atmosphere_settings(
                 row_with_default(
                     ui,
                     "Sun disk diameter",
-                    sun_disk_diameteter_rad,
+                    sun_disk_diameter_rad,
                     default_params.sun_disk_diameter_rad,
                     egui::Ui::drag_angle,
                 );
