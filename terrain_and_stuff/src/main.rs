@@ -484,7 +484,7 @@ impl Application<'_> {
             shadowmap_rpass.set_bind_group(0, &self.global_bindings.bind_group, &[]);
 
             self.terrain
-                .draw_shadowmap(&mut shadowmap_rpass, &self.pipeline_manager)
+                .draw_shadow_map(&mut shadowmap_rpass, &self.pipeline_manager)
                 .ok_or_log("draw shadowmap");
         }
         {

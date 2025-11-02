@@ -20,6 +20,9 @@ pub struct ShaderEntryPoint {
 
     /// Pipeline overridable constants.
     pub overrides: Vec<(&'static str, f64)>,
+
+    /// Enabled WESL feature flags.
+    pub enabled_feature_flags: Vec<&'static str>,
 }
 
 impl ShaderEntryPoint {
@@ -29,7 +32,14 @@ impl ShaderEntryPoint {
             module_name: path.into(),
             function_name: None,
             overrides: Vec::new(),
+            enabled_feature_flags: Vec::new(),
         }
+    }
+
+    /// Enable a WESL feature flag.
+    pub fn with_feature(mut self, feature: &'static str) -> Self {
+        self.enabled_feature_flags.push(feature);
+        self
     }
 }
 
@@ -320,10 +330,17 @@ fn create_wgpu_render_pipeline(
     descriptor: &RenderPipelineDescriptor,
     device: &wgpu::Device,
 ) -> Result<(wgpu::RenderPipeline, HashSet<ShaderHandle>), PipelineError> {
-    let vertex_shader_handle =
-        shader_cache.get_or_load_shader_module(device, &descriptor.vertex_shader.module_name)?;
+    let vertex_shader_handle = shader_cache.get_or_load_shader_module(
+        device,
+        &descriptor.vertex_shader.module_name,
+        &descriptor.vertex_shader.enabled_feature_flags,
+    )?;
     let fragment_shader_handle = if let Some(fragment_shader) = &descriptor.fragment_shader {
-        Some(shader_cache.get_or_load_shader_module(device, &fragment_shader.module_name)?)
+        Some(shader_cache.get_or_load_shader_module(
+            device,
+            &fragment_shader.module_name,
+            &fragment_shader.enabled_feature_flags,
+        )?)
     } else {
         None
     };
@@ -390,8 +407,11 @@ fn create_wgpu_compute_pipeline(
     descriptor: &ComputePipelineDescriptor,
     device: &wgpu::Device,
 ) -> Result<(wgpu::ComputePipeline, ShaderHandle), PipelineError> {
-    let compute_shader_handle =
-        shader_cache.get_or_load_shader_module(device, &descriptor.compute_shader.module_name)?;
+    let compute_shader_handle = shader_cache.get_or_load_shader_module(
+        device,
+        &descriptor.compute_shader.module_name,
+        &descriptor.compute_shader.enabled_feature_flags,
+    )?;
     let compute_shader_module = shader_cache
         .shader_module(compute_shader_handle)
         .expect("Invalid shader handle");

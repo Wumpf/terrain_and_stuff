@@ -6,6 +6,8 @@ slotmap::new_key_type! { pub struct ShaderHandle; }
 
 struct ShaderEntry {
     module_path: wesl::ModulePath,
+    feature_flags: Vec<String>,
+
     module: wgpu::ShaderModule,
     all_dependencies: Vec<wesl::ModulePath>,
 }
@@ -17,11 +19,10 @@ type WeslResolver = wesl::VirtualResolver<'static>;
 type WeslResolver = wesl::StandardResolver;
 
 pub struct ShaderCache {
-    wesl_compiler: wesl::Wesl<WeslResolver>,
+    wesl_resolver: WeslResolver,
 
     shaders: SlotMap<ShaderHandle, ShaderEntry>,
-    // TODO: Once preprocessor setting is supported, a single module name would map to several shaders?
-    shader_per_module_path: HashMap<wesl::ModulePath, ShaderHandle>,
+    shader_per_module_per_flags: HashMap<wesl::ModulePath, HashMap<Vec<String>, ShaderHandle>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -32,29 +33,28 @@ pub enum ShaderCacheError {
 
 impl ShaderCache {
     pub fn new() -> Self {
-        let wesl_compiler;
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            let mut resolver = wesl::VirtualResolver::new();
-            for (path, content) in crate::shaders_embedded::SHADER_FILES {
-                resolver.add_module(
-                    path_or_name_to_module_path(path),
-                    std::borrow::Cow::Borrowed(content),
-                );
+        let wesl_resolver = {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let mut resolver = wesl::VirtualResolver::new();
+                for (path, content) in crate::shaders_embedded::SHADER_FILES {
+                    resolver.add_module(
+                        path_or_name_to_module_path(path),
+                        std::borrow::Cow::Borrowed(content),
+                    );
+                }
+                resolver
             }
-            wesl_compiler = wesl::Wesl::new("").set_custom_resolver(resolver);
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            wesl_compiler = wesl::Wesl::new("terrain_and_stuff/shaders");
-        }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                wesl::StandardResolver::new("terrain_and_stuff/shaders")
+            }
+        };
 
         Self {
-            wesl_compiler,
-
+            wesl_resolver,
             shaders: Default::default(),
-            shader_per_module_path: Default::default(),
+            shader_per_module_per_flags: Default::default(),
         }
     }
 
@@ -70,17 +70,34 @@ impl ShaderCache {
         &mut self,
         device: &wgpu::Device,
         module_name: &str,
+        enabled_feature_flags: &[&'static str],
     ) -> Result<ShaderHandle, ShaderCacheError> {
         let module_path = path_or_name_to_module_path(module_name);
+        let feature_flags: Vec<String> = enabled_feature_flags
+            .iter()
+            .map(|&flag| flag.to_string())
+            .collect();
 
-        if let Some(handle) = self.shader_per_module_path.get(&module_path) {
-            log::debug!("Shader {module_name:?} already loaded");
+        if let Some(handle) = self
+            .shader_per_module_per_flags
+            .get(&module_path)
+            .and_then(|map| map.get(&feature_flags))
+        {
+            log::debug!("Shader {module_name:?} already loaded with {feature_flags:?} flags");
             return Ok(*handle);
         }
 
-        let shader = compile_shader(&self.wesl_compiler, device, module_path.clone())?;
+        let shader = compile_shader(
+            &self.wesl_resolver,
+            device,
+            module_path.clone(),
+            feature_flags.clone(),
+        )?;
         let handle = self.shaders.insert(shader);
-        self.shader_per_module_path.insert(module_path, handle);
+        self.shader_per_module_per_flags
+            .entry(module_path)
+            .or_default()
+            .insert(feature_flags, handle);
 
         Ok(handle)
     }
@@ -105,9 +122,10 @@ impl ShaderCache {
                 log::info!("Reloading shader {handle:?}");
 
                 *shader_entry = compile_shader(
-                    &self.wesl_compiler,
+                    &self.wesl_resolver,
                     device,
                     shader_entry.module_path.clone(),
+                    shader_entry.feature_flags.clone(),
                 )?;
                 reloaded_shaders.push(handle);
             }
@@ -118,10 +136,24 @@ impl ShaderCache {
 }
 
 fn compile_shader(
-    compiler: &wesl::Wesl<WeslResolver>,
+    wesl_resolver: &WeslResolver,
     device: &wgpu::Device,
     module_path: wesl::ModulePath,
+    feature_flags: Vec<String>,
 ) -> Result<ShaderEntry, ShaderCacheError> {
+    let mut compiler = wesl::Wesl::new_barebones().set_custom_resolver(wesl_resolver);
+    compiler.set_mangler(wesl::ManglerKind::Escape);
+    compiler.set_options(wesl::CompileOptions {
+        features: wesl::Features {
+            default: wesl::Feature::Disable,
+            flags: feature_flags
+                .iter()
+                .map(|flag| (flag.clone(), wesl::Feature::Enable))
+                .collect(),
+        },
+        ..Default::default()
+    });
+
     let compile_result = compiler.compile(&module_path)?;
 
     let wgsl_source = compile_result.to_string();
@@ -132,6 +164,7 @@ fn compile_shader(
 
     Ok(ShaderEntry {
         module_path,
+        feature_flags,
         module,
         all_dependencies: compile_result.modules,
     })

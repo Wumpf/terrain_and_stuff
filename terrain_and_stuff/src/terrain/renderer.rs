@@ -15,7 +15,7 @@ use crate::{
 
 pub struct TerrainRenderer {
     render_pipeline: RenderPipelineHandle,
-    shadowmap_pipeline: RenderPipelineHandle,
+    shadow_map_pipeline: RenderPipelineHandle,
 
     bindgroup: wgpu::BindGroup,
     texture_size: glam::UVec2,
@@ -99,10 +99,13 @@ impl TerrainRenderer {
         let render_pipeline =
             pipeline_manager.create_render_pipeline(device, render_pipeline_descriptor.clone())?;
 
-        let shadowmap_pipeline = pipeline_manager.create_render_pipeline(
+        let shadow_map_pipeline = pipeline_manager.create_render_pipeline(
             device,
             RenderPipelineDescriptor {
                 debug_label: "Terrain Shadow".to_owned(),
+                vertex_shader: render_pipeline_descriptor
+                    .vertex_shader
+                    .with_feature("SHADOW_MAP"),
                 fragment_shader: None,
                 fragment_targets: Vec::new(),
                 depth_stencil: Some(ShadowMap::STATE_WRITE),
@@ -117,7 +120,7 @@ impl TerrainRenderer {
 
         Ok(Self {
             render_pipeline,
-            shadowmap_pipeline,
+            shadow_map_pipeline,
             bindgroup,
             texture_size: glam::uvec2(heightmap_texture.width(), heightmap_texture.height()),
         })
@@ -137,12 +140,12 @@ impl TerrainRenderer {
         )
     }
 
-    pub fn draw_shadowmap(
+    pub fn draw_shadow_map(
         &self,
         rpass: &mut wgpu::RenderPass<'_>,
         pipeline_manager: &PipelineManager,
     ) -> Result<(), PipelineError> {
-        let pipeline = pipeline_manager.get_render_pipeline(self.shadowmap_pipeline)?;
+        let pipeline = pipeline_manager.get_render_pipeline(self.shadow_map_pipeline)?;
         self.draw_impl(rpass, pipeline)
     }
 

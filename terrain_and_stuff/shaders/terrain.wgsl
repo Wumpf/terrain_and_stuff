@@ -63,7 +63,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let world_position = vec3f(world_position_2d, height).xzy;
 
     var out: VertexOutput;
-    out.position = frame_uniforms.projection_from_world * vec4f(world_position, 1.0);
+
+    @if(SHADOW_MAP) let projection = frame_uniforms.shadow_map_from_world;
+    @else let projection = frame_uniforms.projection_from_world;
+    out.position = projection * vec4f(world_position, 1.0);
+
     out.texcoord = world_position.xz / (grid_size_f * grid_to_world);
     out.normal = normal;
     return out;
