@@ -8,7 +8,7 @@ impl PrimaryDepthBuffer {
     pub const STATE_WRITE: wgpu::DepthStencilState = wgpu::DepthStencilState {
         format: Self::FORMAT,
         depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::GreaterEqual, // Near plane is at 0, infinity is at 1.
+        depth_compare: wgpu::CompareFunction::GreaterEqual, // Near plane is at 1, infinity is at 0.
         bias: wgpu::DepthBiasState {
             constant: 0,
             slope_scale: 0.0,
@@ -59,7 +59,7 @@ impl PrimaryDepthBuffer {
         wgpu::RenderPassDepthStencilAttachment {
             view: &self.view,
             depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(0.0), // Near plane is at 0, infinity is at 1.
+                load: wgpu::LoadOp::Clear(0.0), // Near plane is at 1, infinity is at 0.
                 // Need to store depth for sky raymarching.
                 store: wgpu::StoreOp::Store,
             }),

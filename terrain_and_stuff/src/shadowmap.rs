@@ -11,7 +11,7 @@ pub struct ShadowMap {
     debug_draw: RenderPipelineHandle,
 }
 
-const RESOLUTION: u32 = 2024;
+const RESOLUTION: u32 = 1024;
 
 impl ShadowMap {
     pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -19,7 +19,7 @@ impl ShadowMap {
     pub const STATE_WRITE: wgpu::DepthStencilState = wgpu::DepthStencilState {
         format: Self::FORMAT,
         depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::LessEqual,
+        depth_compare: wgpu::CompareFunction::LessEqual, // Near plane is at 0, far plane is at 1.
         stencil: wgpu::StencilState {
             front: wgpu::StencilFaceState::IGNORE,
             back: wgpu::StencilFaceState::IGNORE,
@@ -98,25 +98,21 @@ impl ShadowMap {
     }
 
     /// Compute an orthographic shadow projection matrix that covers the world_bounding_box
-    /// from the perspective of the sun (light_direction).
+    /// from the perspective of the sun.
     pub fn shadow_projection_from_world(
         &self,
-        light_dir: glam::Vec3,
+        dir_to_sun: glam::Vec3,
         world_bounding_box: macaw::BoundingBox,
     ) -> glam::Mat4 {
-        // Create light's basis (right, up, direction)
+        // Create light's basis.
         // We use this as the light space - we don't need to "place" the camera for an orthographic projection,
         // since we can do that as part of the projection matrix.
-        let light_space_from_world = {
-            let tmp_up = if light_dir.abs().y < 0.99 {
-                glam::Vec3::Y
-            } else {
-                glam::Vec3::X
-            };
-            let light_right = light_dir.cross(tmp_up).normalize();
-            let light_up = light_right.cross(light_dir).normalize();
-            glam::Mat3::from_cols(light_right, light_up, light_dir)
+        let up = if dir_to_sun.y < 0.99 {
+            glam::Vec3::Y
+        } else {
+            glam::Vec3::X
         };
+        let light_space_from_world = glam::Mat3::look_to_lh(-dir_to_sun, up);
 
         // Transform corners of the world bounding box into light space
         let light_space_bounding_box = macaw::BoundingBox::from_points(
@@ -124,10 +120,11 @@ impl ShadowMap {
                 .corners()
                 .into_iter()
                 .map(|corner| light_space_from_world * corner),
-        );
+        )
+        .expanded(glam::Vec3::splat(10.0)); // Add some padding to avoid problems with inaccuracies.
 
         // This directly forms the projection matrix.
-        let shadow_map_from_light_space = glam::Mat4::orthographic_rh(
+        let shadow_map_from_light_space = glam::Mat4::orthographic_lh(
             light_space_bounding_box.min.x,
             light_space_bounding_box.max.x,
             light_space_bounding_box.min.y,
@@ -146,7 +143,7 @@ impl ShadowMap {
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.texture_view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
+                    load: wgpu::LoadOp::Clear(1.0), // Near plane is at 0, far plane is at 1.
                     store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
