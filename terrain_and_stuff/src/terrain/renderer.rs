@@ -17,7 +17,10 @@ pub struct TerrainRenderer {
     render_pipeline: RenderPipelineHandle,
     shadow_map_pipeline: RenderPipelineHandle,
 
-    bindgroup: wgpu::BindGroup,
+    bindgroup_lighting: wgpu::BindGroup,
+    // Variant of `bindgroup_lighting` when drawing the shadow map.
+    bindgroup_lighting_shadow: wgpu::BindGroup,
+    bindgroup_terrain: wgpu::BindGroup,
     texture_size: glam::UVec2,
 }
 
@@ -27,6 +30,7 @@ impl TerrainRenderer {
         queue: &wgpu::Queue,
         global_bindings: &GlobalBindings,
         sky_and_sun_lighting_params_buffer: &wgpu::Buffer,
+        shadow_map: &ShadowMap,
         pipeline_manager: &mut PipelineManager,
     ) -> Result<Self, PipelineError> {
         // Hardcoded heightmap for now. Want to generate eventually!
@@ -62,18 +66,31 @@ impl TerrainRenderer {
             )
         };
 
-        let bindgroup_layout = BindGroupLayoutBuilder::new()
-            // Heightmap.
-            .next_binding_vertex(wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            })
+        let bindgroup_layout_lighting = BindGroupLayoutBuilder::new()
             // Sun color + SH coefficients.
             .next_binding_fragment(wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
                 min_binding_size: NonZeroU64::new(sky_and_sun_lighting_params_buffer.size()),
+            })
+            // Shadow map.
+            .next_binding_fragment(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            })
+            // Shadow comparison sampler.
+            .next_binding_fragment(wgpu::BindingType::Sampler(
+                wgpu::SamplerBindingType::Comparison,
+            ))
+            .create(device, "Lighting");
+
+        let bindgroup_layout_terrain = BindGroupLayoutBuilder::new()
+            // Heightmap.
+            .next_binding_vertex(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
             })
             .create(device, "Terrain");
 
@@ -81,7 +98,8 @@ impl TerrainRenderer {
             label: Some("Terrain"),
             bind_group_layouts: &[
                 &global_bindings.bind_group_layout.layout,
-                &bindgroup_layout.layout,
+                &bindgroup_layout_lighting.layout,
+                &bindgroup_layout_terrain.layout,
             ],
             push_constant_ranges: &[],
         });
@@ -113,15 +131,28 @@ impl TerrainRenderer {
             },
         )?;
 
-        let bindgroup = BindGroupBuilder::new(&bindgroup_layout)
-            .texture(&heightmap_texture.create_view(&wgpu::TextureViewDescriptor::default()))
+        let bindgroup_lighting = BindGroupBuilder::new(&bindgroup_layout_lighting)
             .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
+            .texture(shadow_map.shadow_map_view())
+            .sampler(shadow_map.shadow_comparison_sampler())
+            .create(device, "Terrain");
+
+        let bindgroup_lighting_shadow = BindGroupBuilder::new(&bindgroup_layout_lighting)
+            .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
+            .texture(shadow_map.shadow_map_placeholder_view())
+            .sampler(shadow_map.shadow_comparison_sampler())
+            .create(device, "Terrain");
+
+        let bindgroup_terrain = BindGroupBuilder::new(&bindgroup_layout_terrain)
+            .texture(&heightmap_texture.create_view(&wgpu::TextureViewDescriptor::default()))
             .create(device, "Terrain");
 
         Ok(Self {
             render_pipeline,
             shadow_map_pipeline,
-            bindgroup,
+            bindgroup_lighting,
+            bindgroup_lighting_shadow,
+            bindgroup_terrain,
             texture_size: glam::uvec2(heightmap_texture.width(), heightmap_texture.height()),
         })
     }
@@ -146,6 +177,7 @@ impl TerrainRenderer {
         pipeline_manager: &PipelineManager,
     ) -> Result<(), PipelineError> {
         let pipeline = pipeline_manager.get_render_pipeline(self.shadow_map_pipeline)?;
+        rpass.set_bind_group(1, &self.bindgroup_lighting_shadow, &[]);
         self.draw_impl(rpass, pipeline)
     }
 
@@ -155,6 +187,7 @@ impl TerrainRenderer {
         pipeline_manager: &PipelineManager,
     ) -> Result<(), PipelineError> {
         let pipeline = pipeline_manager.get_render_pipeline(self.render_pipeline)?;
+        rpass.set_bind_group(1, &self.bindgroup_lighting, &[]);
         self.draw_impl(rpass, pipeline)
     }
 
@@ -168,7 +201,7 @@ impl TerrainRenderer {
         let num_vertices = num_triangles * 3;
 
         rpass.push_debug_group("Terrain");
-        rpass.set_bind_group(1, &self.bindgroup, &[]);
+        rpass.set_bind_group(2, &self.bindgroup_terrain, &[]);
         rpass.set_pipeline(pipeline);
         rpass.draw(0..num_vertices, 0..1);
         rpass.pop_debug_group();

@@ -186,14 +186,6 @@ impl Application<'_> {
             &primary_depth_buffer,
         )
         .context("Create sky renderer")?;
-        let terrain = TerrainRenderer::new(
-            &device,
-            &queue,
-            &global_bindings,
-            atmosphere.sun_and_sky_lighting_params_buffer(),
-            &mut pipeline_manager,
-        )
-        .context("Create terrain renderer")?;
         let shadow_map = ShadowMap::new(
             &device,
             &global_bindings,
@@ -201,6 +193,15 @@ impl Application<'_> {
             screen.surface_format(),
         )
         .context("Create shadow map")?;
+        let terrain = TerrainRenderer::new(
+            &device,
+            &queue,
+            &global_bindings,
+            atmosphere.sun_and_sky_lighting_params_buffer(),
+            &shadow_map,
+            &mut pipeline_manager,
+        )
+        .context("Create terrain renderer")?;
 
         // Now that initialization is over (!), make sure to catch all errors, never crash, and deduplicate reported errors.
         // `on_uncaptured_error` is a last-resort handler which we should never hit,
@@ -291,7 +292,7 @@ impl Application<'_> {
             glam::uvec2(self.window.get_size().0 as _, self.window.get_size().1 as _);
 
         if self.screen.resolution() != current_resolution
-            // Ignore zero sized windows, lots of resize operations can't handle this.
+            // Ignore zero-sized windows, lots of resize operations can't handle this.
             && current_resolution.x != 0
             && current_resolution.y != 0
         {
@@ -449,7 +450,7 @@ impl Application<'_> {
                 error_scope.end(),
                 self.active_frame_index,
                 move |err_tracker, frame_index| {
-                    // Update last completed frame index.
+                    // Update the last completed frame index.
                     //
                     // Note that this means that the device timeline has now finished this frame as well!
                     // Reminder: On WebGPU the device timeline may be arbitrarily behind the content timeline!

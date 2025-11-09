@@ -6,12 +6,15 @@ use crate::wgpu_utils::{BindGroupBuilder, BindGroupLayoutBuilder};
 
 pub struct ShadowMap {
     texture_view: wgpu::TextureView,
+    placeholder_texture_view: wgpu::TextureView,
+
+    comparison_sampler: wgpu::Sampler,
 
     debug_bind_group: wgpu::BindGroup,
     debug_draw: RenderPipelineHandle,
 }
 
-const RESOLUTION: u32 = 1024;
+const RESOLUTION: u32 = 4096;
 
 impl ShadowMap {
     pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -39,7 +42,7 @@ impl ShadowMap {
         pipeline_manager: &mut PipelineManager,
         surface_format: wgpu::TextureFormat,
     ) -> Result<Self, PipelineError> {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let shadow_texture_desc = wgpu::TextureDescriptor {
             label: Some("Shadowmap"),
             size: wgpu::Extent3d {
                 width: RESOLUTION,
@@ -52,9 +55,27 @@ impl ShadowMap {
             format: Self::FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[Self::FORMAT],
-        });
-
+        };
+        let texture = device.create_texture(&shadow_texture_desc);
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let placeholder_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Placeholder shadowmap"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            ..shadow_texture_desc
+        });
+        let placeholder_texture_view =
+            placeholder_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let comparison_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Shadowmap comparison sampler"),
+            compare: Some(wgpu::CompareFunction::Less),
+            ..Default::default()
+        });
 
         let debug_bind_group_layout = BindGroupLayoutBuilder::new()
             .next_binding_fragment(wgpu::BindingType::Texture {
@@ -92,9 +113,25 @@ impl ShadowMap {
 
         Ok(Self {
             texture_view,
+            placeholder_texture_view,
+            comparison_sampler,
             debug_draw,
             debug_bind_group,
         })
+    }
+
+    pub fn shadow_map_view(&self) -> &wgpu::TextureView {
+        &self.texture_view
+    }
+
+    /// Placeholder textur that can be used while drawing to the shadow map so that
+    /// we don't need different bind group setups.
+    pub fn shadow_map_placeholder_view(&self) -> &wgpu::TextureView {
+        &self.placeholder_texture_view
+    }
+
+    pub fn shadow_comparison_sampler(&self) -> &wgpu::Sampler {
+        &self.comparison_sampler
     }
 
     /// Compute an orthographic shadow projection matrix that covers the world_bounding_box
