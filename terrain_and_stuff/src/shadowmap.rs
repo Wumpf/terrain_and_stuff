@@ -58,7 +58,7 @@ impl ShadowMap {
 
         let debug_bind_group_layout = BindGroupLayoutBuilder::new()
             .next_binding_fragment(wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                sample_type: wgpu::TextureSampleType::Depth,
                 view_dimension: wgpu::TextureViewDimension::D2,
                 multisampled: false,
             })

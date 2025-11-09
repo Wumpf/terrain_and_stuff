@@ -1,11 +1,11 @@
 @group(1) @binding(0)
-var shadowmap: texture_2d<f32>;
+var shadowmap: texture_depth_2d;
 
 @fragment
 fn fs_main(@builtin(position) frag_coords: vec4<f32>) -> @location(0) vec4<f32> {
 
     let texel_coords = vec2u(frag_coords.xy);
-    let shadow_distance = textureLoad(shadowmap, texel_coords, 0).x;
+    let shadow_distance = textureLoad(shadowmap, texel_coords, 0);
 
     if shadow_distance == 1.0 {
         return vec4f(0.0, 0.0, 1.0, 1.0);
