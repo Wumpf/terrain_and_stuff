@@ -13,7 +13,7 @@ import package::atmosphere::params::{
     AtmosphereDebugDrawMode_TransmittanceLut,
     AtmosphereDebugDrawMode_MultipleScatteringLut,
 };
-import package::atmosphere::raymarch::{raymarch_scattering};
+import package::atmosphere::raymarch::{raymarch_scattering, ShadowParams};
 import package::atmosphere::sky_and_sun_lighting::{SkyAndSunLightingParams};
 
 enable dual_source_blending;
@@ -21,6 +21,9 @@ enable dual_source_blending;
 @group(2) @binding(0) var lut_transmittance: texture_2d<f32>;
 @group(2) @binding(1) var lut_multiple_scattering: texture_2d<f32>;
 @group(2) @binding(2) var<uniform> sky_and_sun_lighting_params: SkyAndSunLightingParams;
+@group(2) @binding(3) var shadow_map: texture_depth_2d;
+@group(2) @binding(4) var shadow_sampler: sampler_comparison;
+
 @group(3) @binding(0) var screen_depth: texture_2d<f32>;
 
 const NumScatteringSteps: f32 = 64.0;
@@ -46,7 +49,7 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
 
     // For our camera we generally assume a flat planet.
     // But as we march through the atmosphere, we have to take into account that the atmosphere is curved.
-    let planet_relative_position_km = vec3(0.0, camera_ray.origin.y * 0.001 + atmosphere_params.ground_radius_km, 0.0);
+    let planet_relative_position_km = camera_ray.origin * 0.001 + vec3(0.0, atmosphere_params.ground_radius_km, 0.0);
 
     // Randomize ray offset.
     let bluenoise_texcoord = vec2f(position.xy) / vec2f(textureDimensions(bluenoise).xy);
@@ -58,8 +61,9 @@ fn fs_main(@location(0) texcoord: vec2f, @builtin(position) position: vec4f) -> 
         lut_multiple_scattering,
         camera_ray.direction,
         planet_relative_position_km,
-        frame_uniforms.dir_to_sun,
-        geometry_distance_on_camera_ray
+        geometry_distance_on_camera_ray,
+        shadow_map,
+        shadow_sampler,
     );
     if depth_buffer_depth == 0.0 {
         result.scattering += sun_disk_luminance(camera_ray, frame_uniforms.dir_to_sun);

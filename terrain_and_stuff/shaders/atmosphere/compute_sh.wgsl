@@ -63,7 +63,6 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
         multiple_scattering_lut,
         direction,
         planet_relative_position_km,
-        frame_uniforms.dir_to_sun,
         max_marching_distance_km
     );
 
@@ -92,7 +91,6 @@ fn parallel_reduce_shared_buffer(sample: vec3f, sample_index: u32, target_coeffi
             multiple_scattering_lut,
             frame_uniforms.dir_to_sun,
             planet_relative_position_km,
-            frame_uniforms.dir_to_sun,
             max_marching_distance_km
         );
 

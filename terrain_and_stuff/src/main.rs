@@ -179,13 +179,6 @@ impl Application<'_> {
         let gui = EguiMinifb::new(&device, &screen);
         window.set_input_callback(Box::new(gui.text_callback()));
 
-        let atmosphere = Atmosphere::new(
-            &device,
-            &global_bindings,
-            &mut pipeline_manager,
-            &primary_depth_buffer,
-        )
-        .context("Create sky renderer")?;
         let shadow_map = ShadowMap::new(
             &device,
             &global_bindings,
@@ -193,6 +186,14 @@ impl Application<'_> {
             screen.surface_format(),
         )
         .context("Create shadow map")?;
+        let atmosphere = Atmosphere::new(
+            &device,
+            &global_bindings,
+            &primary_depth_buffer,
+            &shadow_map,
+            &mut pipeline_manager,
+        )
+        .context("Create sky renderer")?;
         let terrain = TerrainRenderer::new(
             &device,
             &queue,

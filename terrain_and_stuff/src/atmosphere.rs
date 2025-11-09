@@ -2,6 +2,7 @@ use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt;
 
+use crate::shadowmap::ShadowMap;
 use crate::{
     EncoderScope,
     primary_depth_buffer::PrimaryDepthBuffer,
@@ -208,8 +209,9 @@ impl Atmosphere {
     pub fn new(
         device: &wgpu::Device,
         global_bindings: &GlobalBindings,
-        pipeline_manager: &mut PipelineManager,
         primary_depth_buffer: &PrimaryDepthBuffer,
+        shadow_map: &ShadowMap,
+        pipeline_manager: &mut PipelineManager,
     ) -> Result<Self, PipelineError> {
         let sh_coefficients_buffer_size = (1 + 3 + 5 // SH bands 0, 1, 2
             + 1) * // Sun illuminance.
@@ -354,24 +356,34 @@ impl Atmosphere {
         };
 
         let render_atmosphere_bindings_main = BindGroupLayoutBuilder::new()
-            // [in] transmittance lut
+            // transmittance lut
             .next_binding_fragment(wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
                 view_dimension: wgpu::TextureViewDimension::D2,
                 multisampled: false,
             })
-            // [in] multiple scattering lut
+            // multiple scattering lut
             .next_binding_fragment(wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
                 view_dimension: wgpu::TextureViewDimension::D2,
                 multisampled: false,
             })
-            // [in] sun color + sh coefficients
+            // sun color + sh coefficients
             .next_binding_fragment(wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
                 min_binding_size: NonZeroU64::new(sh_coefficients_buffer_size),
             })
+            // shadow map
+            .next_binding_fragment(wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            })
+            // shadow sampler
+            .next_binding_fragment(wgpu::BindingType::Sampler(
+                wgpu::SamplerBindingType::Comparison,
+            ))
             .create(device, "render_atmosphere_main");
 
         let render_atmosphere_bindgroup_main =
@@ -379,10 +391,12 @@ impl Atmosphere {
                 .texture(&lut_transmittance)
                 .texture(&lut_multiple_scattering)
                 .buffer(sky_and_sun_lighting_params_buffer.as_entire_buffer_binding())
+                .texture(shadow_map.shadow_map_view())
+                .sampler(shadow_map.shadow_comparison_sampler())
                 .create(device, "render_atmosphere_main");
 
         let render_atmosphere_bindings_screen_dependent = BindGroupLayoutBuilder::new()
-            // [in] depth buffer
+            // depth buffer
             .next_binding_fragment(wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 view_dimension: wgpu::TextureViewDimension::D2,
@@ -408,9 +422,10 @@ impl Atmosphere {
                     debug_label: "render_atmosphere".to_owned(),
                     layout: raymarch_layout,
                     vertex_shader: ShaderEntryPoint::first_in("screen_triangle.wgsl"),
-                    fragment_shader: Some(ShaderEntryPoint::first_in(
-                        "atmosphere/render_atmosphere.wgsl",
-                    )),
+                    fragment_shader: Some(
+                        ShaderEntryPoint::first_in("atmosphere/render_atmosphere.wgsl")
+                            .with_feature("SAMPLE_SHADOW"),
+                    ),
                     fragment_targets: vec![wgpu::ColorTargetState {
                         format: HdrBackbuffer::FORMAT,
                         blend: Some(wgpu::BlendState {

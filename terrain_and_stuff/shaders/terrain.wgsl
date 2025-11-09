@@ -97,7 +97,7 @@ fn fs_main(in: VertexOutput) -> @location(0)  vec4f {
     let illuminance_direct = sky_and_sun_lighting_params.sun_illuminance * saturate(dot(normal, frame_uniforms.dir_to_sun));
 
     let direct_shadow = sample_shadow(in.shadow_position);
-    let indirect_shadow = saturate(direct_shadow + 0.75); // Made up. I feel like there's too much light otherwise. TODO: we probably just have too much indirect light to begin with?
+    let indirect_shadow = saturate(direct_shadow + 0.5); // Made up. I feel like there's too much light otherwise. TODO: we probably just have too much indirect light to begin with?
 
     let illuminance = illuminance_direct * direct_shadow + illuminance_sky * indirect_shadow;
 

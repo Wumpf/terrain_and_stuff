@@ -17,6 +17,7 @@
 // for our photometric units actually mean - see also Nathan's comment here on recommending to cheat
 // by using fixed wavelengths rather spectra https://computergraphics.stackexchange.com/a/1994
 
+import package::global_bindings::{frame_uniforms};
 import package::intersections::{Ray, ray_sphere_intersect};
 import package::global_bindings::{trilinear_sampler_clamp};
 
@@ -56,6 +57,27 @@ fn max_marching_distance_km(ray_to_sun_km: Ray, geometry_distance_on_camera_ray:
     return min(atmosphere_or_ground_distance_km, geometry_distance_on_camera_ray * 0.001);
 }
 
+struct Segment {
+    t: f32,
+    dt: f32,
+}
+
+fn compute_segment(i: f32, sample_segment_t: f32, inv_num_scattering_steps: f32, max_marching_distance_km: f32) -> Segment {
+    var segment: Segment;
+    // Quadratic distance sampling for much higher precision up close.
+    var t0 = i * inv_num_scattering_steps;
+    var t1 = t0 + inv_num_scattering_steps;
+    t1 = (t1 * t1) * max_marching_distance_km;
+    t0 = (t0 * t0) * max_marching_distance_km;
+
+    segment.dt = t1 - t0;
+    // We don't use `sample_segment_t` as a fixed offset, but rather as a percentage of the current segment
+    // (with segments becoming larger quadratically larger)
+    segment.t = t0 + segment.dt * sample_segment_t;
+
+    return segment;
+}
+
 // `sample_segment_t` determines where along the segment we sample transmittance and scattering.
 // It's expected to be a random value in range 0-1.
 fn raymarch_scattering(sample_segment_t: f32,
@@ -63,14 +85,15 @@ fn raymarch_scattering(sample_segment_t: f32,
                         multiple_scattering_lut: texture_2d<f32>,
                         direction: vec3f,
                         planet_relative_position_km: vec3f,
-                        dir_to_sun: vec3f,
-                        geometry_distance_on_camera_ray: f32
+                        geometry_distance_on_camera_ray: f32,
+                        @if(SAMPLE_SHADOW) shadow_map: texture_depth_2d,
+                        @if(SAMPLE_SHADOW) shadow_sampler: sampler_comparison,
                     ) -> ScatteringResult {
 
-    let ray_to_sun_km = Ray(planet_relative_position_km, dir_to_sun);
+    let ray_to_sun_km = Ray(planet_relative_position_km, frame_uniforms.dir_to_sun);
     let max_marching_distance_km = max_marching_distance_km(ray_to_sun_km, geometry_distance_on_camera_ray);
 
-    let cos_theta = dot(direction, dir_to_sun);
+    let cos_theta = dot(direction, frame_uniforms.dir_to_sun);
 
     let mie_phase = mie_phase(cos_theta);
     let rayleigh_phase = rayleigh_phase(cos_theta);
@@ -81,37 +104,39 @@ fn raymarch_scattering(sample_segment_t: f32,
     // TODO: Using a fixed sample count right now, but maybe we should use a dynamic one depending on the distance we're marching?
     let inv_num_scattering_steps = 1.0 / NumScatteringSteps;
     for (var i = 0.0; i < NumScatteringSteps; i += 1.0) {
-        // Quadratic distance sampling for much higher precision up close.
-        var t0 = i * inv_num_scattering_steps;
-        var t1 = t0 + inv_num_scattering_steps;
-        t1 = (t1 * t1) * max_marching_distance_km;
-        t0 = (t0 * t0) * max_marching_distance_km;
-        var dt = t1 - t0;
-        // We don't use `sample_segment_t` as a fixed offset, but rather as a percentage of the current segment
-        // (with segments becoming larger quadratically larger)
-        let t = t0 + dt * sample_segment_t;
+        let s = compute_segment(i, sample_segment_t, inv_num_scattering_steps, max_marching_distance_km);
 
-        let new_planet_relative_position_km = planet_relative_position_km + t * direction;
+        let new_planet_relative_position_km = planet_relative_position_km + s.t * direction;
         let sample_height = length(new_planet_relative_position_km);
         let altitude_km = clamp(sample_height, atmosphere_params.ground_radius_km,
                                 atmosphere_params.atmosphere_radius_km) - atmosphere_params.ground_radius_km;
         let zenith = new_planet_relative_position_km / sample_height;
-        let sun_cos_zenith_angle = dot(zenith, dir_to_sun);
+        let sun_cos_zenith_angle = dot(zenith, frame_uniforms.dir_to_sun);
 
         let scattering = scattering_values_for(altitude_km);
-        let sample_transmittance = exp(-dt * scattering.total_extinction_per_km);
+        let sample_transmittance = exp(-s.dt * scattering.total_extinction_per_km);
 
         let sun_transmittance = sample_transmittance_lut(transmittance_lut, altitude_km, sun_cos_zenith_angle);
 
 
         // TODO: earth shadow at night?
         // https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/Resources/RenderSkyRayMarching.hlsl#L181
-        // let t_earth = ray_sphere_intersect(Ray(new_planet_relative_position_km, -dir_to_sun), atmosphere_params.ground_radius_km);
+        // let t_earth = ray_sphere_intersect(Ray(new_planet_relative_position_km, -frame_uniforms.dir_to_sun), atmosphere_params.ground_radius_km);
         // let planet_shadow = f32(t_earth >= 0.0);
         let planet_shadow = 1.0;
 
-        // TODO: large shadow casters (like mountains or clouds)
-        let shadow = 1.0;
+        // Sample primary shadow map.
+        var shadow = 1.0;
+        @if(SAMPLE_SHADOW)
+        {
+            let world_position = (new_planet_relative_position_km - vec3f(0.0, atmosphere_params.ground_radius_km, 0.0)) * 1000.0;
+            let shadow_proj = (frame_uniforms.shadow_map_from_world * vec4f(world_position, 1.0));
+            if shadow_proj.x <= 1.0 && shadow_proj.x >= -1.0 &&
+               shadow_proj.y <= 1.0 && shadow_proj.y >= -1.0 &&
+               shadow_proj.z <= 1.0 && shadow_proj.z >= 0.0 {
+                shadow = textureSampleCompare(shadow_map, shadow_sampler, shadow_proj.xy * vec2(0.5, -0.5) + vec2f(0.5), shadow_proj.z);
+            }
+        }
 
         // Compute amount of light coming in via scattering.
         let phase_times_scattering = scattering.mie * mie_phase + scattering.rayleigh * rayleigh_phase;
